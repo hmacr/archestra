@@ -62,12 +62,10 @@ async function insertDocumentAt(
 function makeNoOpConnector() {
   return {
     estimateTotalItems: vi.fn().mockResolvedValue(null),
-    sync: vi.fn().mockImplementation(() =>
-      (async function* () {})(),
-    ),
-    listAllSourceIds: vi.fn().mockImplementation(() =>
-      (async function* () {})(),
-    ),
+    sync: vi.fn().mockImplementation(() => (async function* () {})()),
+    listAllSourceIds: vi
+      .fn()
+      .mockImplementation(() => (async function* () {})()),
   };
 }
 
@@ -90,7 +88,9 @@ function makeConnectorWithSourceIds(
 describe("ConnectorPruneService", () => {
   test("throws when connector not found", async () => {
     await expect(
-      connectorPruneService.executePrune("00000000-0000-0000-0000-000000000000"),
+      connectorPruneService.executePrune(
+        "00000000-0000-0000-0000-000000000000",
+      ),
     ).rejects.toThrow("Connector not found");
   });
 
@@ -114,9 +114,19 @@ describe("ConnectorPruneService", () => {
 
     const runStart = new Date();
     const oldDate = new Date(runStart.getTime() - 60 * 24 * 60 * 60 * 1000); // 60 days ago
-    const oldDoc = await insertDocumentAt(connector.id, org.id, "old-1", oldDate);
+    const oldDoc = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "old-1",
+      oldDate,
+    );
     const recentDate = new Date(runStart.getTime() - 5 * 24 * 60 * 60 * 1000); // 5 days ago
-    const recentDoc = await insertDocumentAt(connector.id, org.id, "recent-1", recentDate);
+    const recentDoc = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "recent-1",
+      recentDate,
+    );
 
     const result = await connectorPruneService.executePrune(connector.id);
 
@@ -144,8 +154,18 @@ describe("ConnectorPruneService", () => {
     mockGetConnector.mockReturnValue(mockImpl);
 
     const createdAt = new Date(Date.now() - 10_000);
-    const orphan = await insertDocumentAt(connector.id, org.id, "orphan", createdAt);
-    const alive = await insertDocumentAt(connector.id, org.id, "alive", createdAt);
+    const orphan = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "orphan",
+      createdAt,
+    );
+    const alive = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "alive",
+      createdAt,
+    );
 
     const result = await connectorPruneService.executePrune(connector.id);
 
@@ -178,9 +198,24 @@ describe("ConnectorPruneService", () => {
     const oldDate = new Date(runStart.getTime() - 60 * 24 * 60 * 60 * 1000);
     const recentDate = new Date(runStart.getTime() - 5_000);
 
-    const oldDoc = await insertDocumentAt(connector.id, org.id, "old-doc", oldDate);
-    const orphan = await insertDocumentAt(connector.id, org.id, "orphan", recentDate);
-    const alive = await insertDocumentAt(connector.id, org.id, "alive", recentDate);
+    const oldDoc = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "old-doc",
+      oldDate,
+    );
+    const orphan = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "orphan",
+      recentDate,
+    );
+    const alive = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "alive",
+      recentDate,
+    );
 
     const result = await connectorPruneService.executePrune(connector.id);
 
@@ -219,7 +254,12 @@ describe("ConnectorPruneService", () => {
 
     const runStart = new Date(partialRun.startedAt.getTime());
     const oldDate = new Date(runStart.getTime() - 60 * 24 * 60 * 60 * 1000);
-    const oldDoc = await insertDocumentAt(connector.id, org.id, "old-skip", oldDate);
+    const oldDoc = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "old-skip",
+      oldDate,
+    );
 
     const result = await connectorPruneService.executePrune(connector.id);
 
@@ -260,9 +300,24 @@ describe("ConnectorPruneService", () => {
     });
 
     const createdAt = new Date(partialRun.startedAt.getTime() - 5_000);
-    const orphan = await insertDocumentAt(connector.id, org.id, "orphan", createdAt);
-    const alive1 = await insertDocumentAt(connector.id, org.id, "alive1", createdAt);
-    const alive2 = await insertDocumentAt(connector.id, org.id, "alive2", createdAt);
+    const orphan = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "orphan",
+      createdAt,
+    );
+    const alive1 = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "alive1",
+      createdAt,
+    );
+    const alive2 = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "alive2",
+      createdAt,
+    );
 
     const result = await connectorPruneService.executePrune(connector.id);
 
@@ -317,7 +372,9 @@ describe("ConnectorPruneService", () => {
 
     const updated = await KnowledgeBaseConnectorModel.findById(connector.id);
     expect(updated?.lastPruneAt).toBeInstanceOf(Date);
-    expect(updated?.lastPruneAt!.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(updated?.lastPruneAt?.getTime()).toBeGreaterThanOrEqual(
+      before.getTime(),
+    );
   });
 
   test("lastPruneAt is updated on failed outcome", async ({
@@ -366,7 +423,12 @@ describe("ConnectorPruneService", () => {
     mockGetConnector.mockReturnValue(mockImpl);
 
     const createdAt = new Date(Date.now() - 5_000);
-    const doc = await insertDocumentAt(connector.id, org.id, "safe-doc", createdAt);
+    const doc = await insertDocumentAt(
+      connector.id,
+      org.id,
+      "safe-doc",
+      createdAt,
+    );
 
     const result = await connectorPruneService.executePrune(connector.id);
 

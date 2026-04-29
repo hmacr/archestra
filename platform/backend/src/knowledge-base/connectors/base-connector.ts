@@ -84,7 +84,11 @@ export abstract class BaseConnector implements Connector {
     config: Record<string, unknown>;
     credentials: ConnectorCredentials;
     cursor?: string;
-  }): AsyncGenerator<{ sourceIds: string[]; cursor?: string; hasMore: boolean }> {
+  }): AsyncGenerator<{
+    sourceIds: string[];
+    cursor?: string;
+    hasMore: boolean;
+  }> {
     // No-op default: orphan pruning not supported by this connector.
     // Override in a concrete connector to enable orphan pruning.
   }

@@ -549,10 +549,16 @@ describe("KbDocumentModel", () => {
       const cutoff = new Date("2024-06-01T00:00:00Z");
 
       const oldDoc = await insertDocumentAt(
-        connector.id, org.id, "old-doc", new Date("2024-01-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "old-doc",
+        new Date("2024-01-01T00:00:00Z"),
       );
       const newDoc = await insertDocumentAt(
-        connector.id, org.id, "new-doc", new Date("2024-12-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "new-doc",
+        new Date("2024-12-01T00:00:00Z"),
       );
 
       const deleted = await KbDocumentModel.deleteCreatedBefore({
@@ -576,7 +582,10 @@ describe("KbDocumentModel", () => {
       const cutoff = new Date("2024-06-01T00:00:00Z");
 
       const onCutoff = await insertDocumentAt(
-        connector.id, org.id, "on-cutoff", cutoff,
+        connector.id,
+        org.id,
+        "on-cutoff",
+        cutoff,
       );
 
       const deleted = await KbDocumentModel.deleteCreatedBefore({
@@ -600,10 +609,16 @@ describe("KbDocumentModel", () => {
       const cutoff = new Date("2024-06-01T00:00:00Z");
 
       const doc1 = await insertDocumentAt(
-        connector1.id, org.id, "doc-c1", new Date("2024-01-01T00:00:00Z"),
+        connector1.id,
+        org.id,
+        "doc-c1",
+        new Date("2024-01-01T00:00:00Z"),
       );
       const doc2 = await insertDocumentAt(
-        connector2.id, org.id, "doc-c2", new Date("2024-01-01T00:00:00Z"),
+        connector2.id,
+        org.id,
+        "doc-c2",
+        new Date("2024-01-01T00:00:00Z"),
       );
 
       await KbDocumentModel.deleteCreatedBefore({
@@ -628,10 +643,16 @@ describe("KbDocumentModel", () => {
       const runStart = new Date("2024-12-01T00:00:00Z");
 
       const orphan = await insertDocumentAt(
-        connector.id, org.id, "orphan", new Date("2024-06-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "orphan",
+        new Date("2024-06-01T00:00:00Z"),
       );
       const alive = await insertDocumentAt(
-        connector.id, org.id, "alive", new Date("2024-06-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "alive",
+        new Date("2024-06-01T00:00:00Z"),
       );
 
       const deleted = await KbDocumentModel.deleteOrphaned({
@@ -656,7 +677,10 @@ describe("KbDocumentModel", () => {
       const runStart = new Date("2024-12-01T00:00:00Z");
 
       const doc = await insertDocumentAt(
-        connector.id, org.id, "kept", new Date("2024-06-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "kept",
+        new Date("2024-06-01T00:00:00Z"),
       );
 
       const deleted = await KbDocumentModel.deleteOrphaned({
@@ -681,7 +705,10 @@ describe("KbDocumentModel", () => {
 
       // Created after run start — should be spared even though not in seenIds
       const concurrentDoc = await insertDocumentAt(
-        connector.id, org.id, "concurrent", new Date("2024-12-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "concurrent",
+        new Date("2024-12-01T00:00:00Z"),
       );
 
       const deleted = await KbDocumentModel.deleteOrphaned({
@@ -705,7 +732,10 @@ describe("KbDocumentModel", () => {
       const runStart = new Date("2024-12-01T00:00:00Z");
 
       const doc = await insertDocumentAt(
-        connector.id, org.id, "safe", new Date("2024-06-01T00:00:00Z"),
+        connector.id,
+        org.id,
+        "safe",
+        new Date("2024-06-01T00:00:00Z"),
       );
 
       const deleted = await KbDocumentModel.deleteOrphaned({
@@ -730,10 +760,16 @@ describe("KbDocumentModel", () => {
       const runStart = new Date("2024-12-01T00:00:00Z");
 
       const doc1 = await insertDocumentAt(
-        connector1.id, org.id, "orphan-c1", new Date("2024-01-01T00:00:00Z"),
+        connector1.id,
+        org.id,
+        "orphan-c1",
+        new Date("2024-01-01T00:00:00Z"),
       );
       const doc2 = await insertDocumentAt(
-        connector2.id, org.id, "orphan-c2", new Date("2024-01-01T00:00:00Z"),
+        connector2.id,
+        org.id,
+        "orphan-c2",
+        new Date("2024-01-01T00:00:00Z"),
       );
 
       await KbDocumentModel.deleteOrphaned({

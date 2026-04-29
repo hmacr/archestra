@@ -248,7 +248,7 @@ describe("handleCheckDueConnectors", () => {
     ]);
     // sync check returns true (sync in flight), prune check returns false
     mockHasPendingOrProcessing
-      .mockResolvedValueOnce(true)  // for connector_sync check
+      .mockResolvedValueOnce(true) // for connector_sync check
       .mockResolvedValueOnce(false); // for connector_prune check
 
     await handleCheckDueConnectors();

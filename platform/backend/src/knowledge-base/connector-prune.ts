@@ -109,7 +109,11 @@ class ConnectorPruneService {
 
     try {
       // Phase 1: Cutoff prune
-      if (!cutoffCompleted && connector.cutoffDays !== null && connector.cutoffDays !== undefined) {
+      if (
+        !cutoffCompleted &&
+        connector.cutoffDays !== null &&
+        connector.cutoffDays !== undefined
+      ) {
         const cutoffDate = new Date(
           run.startedAt.getTime() - connector.cutoffDays * 24 * 60 * 60 * 1000,
         );
@@ -179,7 +183,10 @@ class ConnectorPruneService {
           createdBefore,
         });
         documentsPruned += pruned;
-        runLog.info({ pruned, seenCount: seenIds.length }, "Orphan prune completed");
+        runLog.info(
+          { pruned, seenCount: seenIds.length },
+          "Orphan prune completed",
+        );
       }
 
       await ConnectorRunModel.update(run.id, {
