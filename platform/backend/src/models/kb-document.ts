@@ -1,4 +1,13 @@
-import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  lt,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import db, { schema } from "@/database";
 import type {
   AclEntry,
@@ -211,12 +220,15 @@ class KbDocumentModel {
   }): Promise<number> {
     if (params.seenSourceIds.length === 0) return 0;
 
-    const result = await db.execute(sql`
-      DELETE FROM kb_documents
-      WHERE connector_id = ${params.connectorId}
-        AND created_at < ${params.createdBefore}
-        AND source_id != ALL(${sql.array(params.seenSourceIds, "text")})
-    `);
+    const result = await db
+      .delete(schema.kbDocumentsTable)
+      .where(
+        and(
+          eq(schema.kbDocumentsTable.connectorId, params.connectorId),
+          lt(schema.kbDocumentsTable.createdAt, params.createdBefore),
+          notInArray(schema.kbDocumentsTable.sourceId, params.seenSourceIds),
+        ),
+      );
     return result.rowCount ?? 0;
   }
 
