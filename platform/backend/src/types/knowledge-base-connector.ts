@@ -58,6 +58,7 @@ export const InsertKnowledgeBaseConnectorSchema = createInsertSchema(
     config: ConnectorConfigSchema,
     checkpoint: ConnectorCheckpointSchema.optional(),
     lastSyncStatus: NullableConnectorRunStatusSchema.optional(),
+    lastPruneStatus: NullableConnectorRunStatusSchema.optional(),
   },
 ).omit({ id: true, createdAt: true, updatedAt: true });
 export const UpdateKnowledgeBaseConnectorSchema = createUpdateSchema(

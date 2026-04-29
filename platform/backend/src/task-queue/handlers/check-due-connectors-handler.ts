@@ -6,6 +6,7 @@ import {
   TaskModel,
 } from "@/models";
 import { taskQueueService } from "@/task-queue";
+import type { KnowledgeBaseConnector } from "@/types";
 
 const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 
@@ -59,7 +60,7 @@ export async function handleCheckDueConnectors(): Promise<void> {
 }
 
 async function schedulePruneTask(
-  connector: KnowledgeBaseConnectorModel,
+  connector: KnowledgeBaseConnector,
 ): Promise<boolean> {
   try {
     const lastPruneAt = connector.lastPruneAt ?? new Date(0);
