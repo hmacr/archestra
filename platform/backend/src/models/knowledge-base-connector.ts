@@ -6,7 +6,7 @@ import type {
   UpdateKnowledgeBaseConnector,
 } from "@/types";
 import type {
-  ConnectorSyncStatus,
+  ConnectorRunStatus,
   ConnectorType,
 } from "@/types/knowledge-connector";
 
@@ -265,7 +265,7 @@ class KnowledgeBaseConnectorModel {
   }
 
   static async findAllWithStatus(
-    status: ConnectorSyncStatus,
+    status: ConnectorRunStatus,
   ): Promise<KnowledgeBaseConnector[]> {
     return await db
       .select()

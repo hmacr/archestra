@@ -2,6 +2,7 @@ import { and, count, desc, eq, inArray, sql, sum } from "drizzle-orm";
 import db, { schema } from "@/database";
 import type {
   ConnectorRun,
+  ConnectorRunType,
   InsertConnectorRun,
   UpdateConnectorRun,
 } from "@/types";
@@ -21,11 +22,13 @@ class ConnectorRunModel {
       .select({
         id: t.id,
         connectorId: t.connectorId,
+        type: t.type,
         status: t.status,
         startedAt: t.startedAt,
         completedAt: t.completedAt,
         documentsProcessed: t.documentsProcessed,
         documentsIngested: t.documentsIngested,
+        documentsPruned: t.documentsPruned,
         totalItems: t.totalItems,
         totalBatches: t.totalBatches,
         completedBatches: t.completedBatches,
@@ -155,13 +158,32 @@ class ConnectorRunModel {
     return result ?? null;
   }
 
+  static async findPartialByConnector(
+    connectorId: string,
+    type: ConnectorRunType,
+  ): Promise<ConnectorRun | null> {
+    const [result] = await db
+      .select()
+      .from(schema.connectorRunsTable)
+      .where(
+        and(
+          eq(schema.connectorRunsTable.connectorId, connectorId),
+          eq(schema.connectorRunsTable.type, type),
+          eq(schema.connectorRunsTable.status, "partial"),
+        ),
+      )
+      .orderBy(desc(schema.connectorRunsTable.startedAt))
+      .limit(1);
+    return result ?? null;
+  }
+
   static async interruptActiveRuns(connectorId: string): Promise<number> {
     const t = schema.connectorRunsTable;
     const results = await db
       .update(t)
       .set({
         status: "failed",
-        error: "Superseded by new sync run",
+        error: "Superseded by a new run",
         completedAt: sql`NOW()`,
       })
       .where(and(eq(t.connectorId, connectorId), eq(t.status, "running")))

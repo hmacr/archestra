@@ -147,4 +147,119 @@ describe("handleCheckDueConnectors", () => {
 
     expect(mockConnectorUpdate).not.toHaveBeenCalled();
   });
+
+  test("orphaned status cleanup checks both connector_sync and connector_prune task types", async () => {
+    mockFindAllWithStatus.mockResolvedValue([{ id: "conn-orphan" }]);
+    mockHasPendingOrProcessing.mockResolvedValue(false);
+    mockHasActiveRun.mockResolvedValue(false);
+
+    await handleCheckDueConnectors();
+
+    expect(mockHasPendingOrProcessing).toHaveBeenCalledWith(
+      ["connector_sync", "connector_prune"],
+      "conn-orphan",
+    );
+  });
+
+  test("enqueues connector prune when lastPruneAt is null", async () => {
+    mockFindAllEnabled.mockResolvedValue([
+      {
+        id: "conn-1",
+        schedule: "* * * * *",
+        lastSyncAt: new Date(Date.now() - 120_000),
+        lastPruneAt: null,
+      },
+    ]);
+    mockHasPendingOrProcessing.mockResolvedValue(false);
+
+    await handleCheckDueConnectors();
+
+    expect(mockEnqueue).toHaveBeenCalledWith({
+      taskType: "connector_prune",
+      payload: { connectorId: "conn-1" },
+    });
+  });
+
+  test("enqueues connector prune when lastPruneAt is more than 24h ago", async () => {
+    const moreThan24hAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+    mockFindAllEnabled.mockResolvedValue([
+      {
+        id: "conn-1",
+        schedule: "* * * * *",
+        lastSyncAt: new Date(Date.now() - 120_000),
+        lastPruneAt: moreThan24hAgo,
+      },
+    ]);
+    mockHasPendingOrProcessing.mockResolvedValue(false);
+
+    await handleCheckDueConnectors();
+
+    expect(mockEnqueue).toHaveBeenCalledWith({
+      taskType: "connector_prune",
+      payload: { connectorId: "conn-1" },
+    });
+  });
+
+  test("does not enqueue prune when lastPruneAt is less than 24h ago", async () => {
+    const lessThan24hAgo = new Date(Date.now() - 1 * 60 * 60 * 1000);
+    mockFindAllEnabled.mockResolvedValue([
+      {
+        id: "conn-1",
+        schedule: "* * * * *",
+        lastSyncAt: new Date(Date.now() - 120_000),
+        lastPruneAt: lessThan24hAgo,
+      },
+    ]);
+    mockHasPendingOrProcessing.mockResolvedValue(false);
+
+    await handleCheckDueConnectors();
+
+    expect(mockEnqueue).not.toHaveBeenCalledWith(
+      expect.objectContaining({ taskType: "connector_prune" }),
+    );
+  });
+
+  test("does not enqueue prune when connector_prune task is already pending/processing", async () => {
+    mockFindAllEnabled.mockResolvedValue([
+      {
+        id: "conn-1",
+        schedule: "* * * * *",
+        lastSyncAt: new Date(Date.now() - 120_000),
+        lastPruneAt: null,
+      },
+    ]);
+    mockHasPendingOrProcessing.mockResolvedValue(true);
+
+    await handleCheckDueConnectors();
+
+    expect(mockEnqueue).not.toHaveBeenCalledWith(
+      expect.objectContaining({ taskType: "connector_prune" }),
+    );
+  });
+
+  test("prune scheduling is not blocked by an in-flight connector_sync task", async () => {
+    mockFindAllEnabled.mockResolvedValue([
+      {
+        id: "conn-1",
+        schedule: "* * * * *",
+        lastSyncAt: new Date(Date.now() - 120_000),
+        lastPruneAt: null,
+      },
+    ]);
+    // sync check returns true (sync in flight), prune check returns false
+    mockHasPendingOrProcessing
+      .mockResolvedValueOnce(true)  // for connector_sync check
+      .mockResolvedValueOnce(false); // for connector_prune check
+
+    await handleCheckDueConnectors();
+
+    expect(mockEnqueue).toHaveBeenCalledWith({
+      taskType: "connector_prune",
+      payload: { connectorId: "conn-1" },
+    });
+    expect(mockEnqueue).not.toHaveBeenCalledWith({
+      taskType: "connector_sync",
+      payload: { connectorId: "conn-1" },
+    });
+  });
 });

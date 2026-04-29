@@ -221,7 +221,7 @@ describe("TaskModel", () => {
   });
 
   describe("hasPendingOrProcessing", () => {
-    test("returns true when a matching task exists", async () => {
+    test("returns true when a matching task exists (single string type)", async () => {
       await TaskModel.create({
         taskType: "connector_sync",
         payload: { connectorId: "conn-123" },
@@ -238,6 +238,40 @@ describe("TaskModel", () => {
       const result = await TaskModel.hasPendingOrProcessing(
         "connector_sync",
         "conn-nonexistent",
+      );
+      expect(result).toBe(false);
+    });
+
+    test("returns true when matching task exists for array of one type", async () => {
+      await TaskModel.create({
+        taskType: "connector_prune",
+        payload: { connectorId: "conn-array-one" },
+      });
+
+      const result = await TaskModel.hasPendingOrProcessing(
+        ["connector_prune"],
+        "conn-array-one",
+      );
+      expect(result).toBe(true);
+    });
+
+    test("returns true when matching task exists for either type in array", async () => {
+      await TaskModel.create({
+        taskType: "connector_prune",
+        payload: { connectorId: "conn-either" },
+      });
+
+      const result = await TaskModel.hasPendingOrProcessing(
+        ["connector_sync", "connector_prune"],
+        "conn-either",
+      );
+      expect(result).toBe(true);
+    });
+
+    test("returns false when no task matches any type in array", async () => {
+      const result = await TaskModel.hasPendingOrProcessing(
+        ["connector_sync", "connector_prune"],
+        "conn-no-match",
       );
       expect(result).toBe(false);
     });

@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -10,7 +11,7 @@ import {
 import type {
   ConnectorCheckpoint,
   ConnectorConfig,
-  ConnectorSyncStatus,
+  ConnectorRunStatus,
   ConnectorType,
 } from "@/types";
 import type { KnowledgeSourceVisibility } from "@/types/knowledge-base";
@@ -37,8 +38,12 @@ const knowledgeBaseConnectorsTable = pgTable(
     schedule: text("schedule").notNull().default("0 */6 * * *"),
     enabled: boolean("enabled").notNull().default(true),
     lastSyncAt: timestamp("last_sync_at", { mode: "date" }),
-    lastSyncStatus: text("last_sync_status").$type<ConnectorSyncStatus>(),
+    lastSyncStatus: text("last_sync_status").$type<ConnectorRunStatus>(),
     lastSyncError: text("last_sync_error"),
+    lastPruneAt: timestamp("last_prune_at", { mode: "date" }),
+    lastPruneStatus: text("last_prune_status").$type<ConnectorRunStatus>(),
+    lastPruneError: text("last_prune_error"),
+    cutoffDays: integer("cutoff_days"),
     checkpoint: jsonb("checkpoint").$type<ConnectorCheckpoint>(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" })

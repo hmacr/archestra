@@ -34,16 +34,21 @@ export const ConnectorTypeSchema = z.union([
 ]);
 export type ConnectorType = z.infer<typeof ConnectorTypeSchema>;
 
-// ===== Connector Sync Status =====
+// ===== Connector Run Status =====
 
-export const ConnectorSyncStatusSchema = z.enum([
+export const ConnectorRunStatusSchema = z.enum([
   "running",
   "success",
   "completed_with_errors",
   "failed",
   "partial",
 ]);
-export type ConnectorSyncStatus = z.infer<typeof ConnectorSyncStatusSchema>;
+export type ConnectorRunStatus = z.infer<typeof ConnectorRunStatusSchema>;
+
+// ===== Connector Run Type =====
+
+export const ConnectorRunTypeSchema = z.enum(["sync", "prune"]);
+export type ConnectorRunType = z.infer<typeof ConnectorRunTypeSchema>;
 
 // ===== Connector Credentials =====
 
@@ -479,4 +484,18 @@ export interface Connector {
      */
     embeddingInputModalities?: ModelInputModality[];
   }): AsyncGenerator<ConnectorSyncBatch>;
+
+  /**
+   * Enumerate all source IDs from the external system for orphan detection.
+   * Override in concrete connectors to enable orphan pruning.
+   */
+  listAllSourceIds?(params: {
+    config: Record<string, unknown>;
+    credentials: ConnectorCredentials;
+    cursor?: string;
+  }): AsyncGenerator<{
+    sourceIds: string[];
+    cursor?: string;
+    hasMore: boolean;
+  }>;
 }

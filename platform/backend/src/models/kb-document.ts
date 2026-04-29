@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import db, { schema } from "@/database";
 import type {
   AclEntry,
@@ -187,6 +187,37 @@ class KbDocumentModel {
 
     const count = result.rows[0]?.count;
     return typeof count === "number" ? count : Number(count ?? 0);
+  }
+
+  static async deleteCreatedBefore(params: {
+    connectorId: string;
+    before: Date;
+  }): Promise<number> {
+    const result = await db
+      .delete(schema.kbDocumentsTable)
+      .where(
+        and(
+          eq(schema.kbDocumentsTable.connectorId, params.connectorId),
+          lt(schema.kbDocumentsTable.createdAt, params.before),
+        ),
+      );
+    return result.rowCount ?? 0;
+  }
+
+  static async deleteOrphaned(params: {
+    connectorId: string;
+    seenSourceIds: string[];
+    createdBefore: Date;
+  }): Promise<number> {
+    if (params.seenSourceIds.length === 0) return 0;
+
+    const result = await db.execute(sql`
+      DELETE FROM kb_documents
+      WHERE connector_id = ${params.connectorId}
+        AND created_at < ${params.createdBefore}
+        AND source_id != ALL(${sql.array(params.seenSourceIds, "text")})
+    `);
+    return result.rowCount ?? 0;
   }
 
   static async countByKnowledgeBaseIds(

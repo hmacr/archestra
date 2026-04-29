@@ -1,6 +1,30 @@
+import db, { schema } from "@/database";
 import { describe, expect, test } from "@/test";
-import type { InsertKbDocument } from "@/types";
+import type { InsertKbDocument, KbDocument } from "@/types";
 import KbDocumentModel from "./kb-document";
+
+async function insertDocumentAt(
+  connectorId: string,
+  organizationId: string,
+  sourceId: string,
+  createdAt: Date,
+): Promise<KbDocument> {
+  const id = crypto.randomUUID().substring(0, 8);
+  const [result] = await db
+    .insert(schema.kbDocumentsTable)
+    .values({
+      connectorId,
+      organizationId,
+      sourceId,
+      title: `Doc ${id}`,
+      content: `Content ${id}`,
+      contentHash: `hash-${id}`,
+      createdAt,
+      updatedAt: createdAt,
+    })
+    .returning();
+  return result;
+}
 
 function createDocumentData(
   connectorId: string,
@@ -510,6 +534,216 @@ describe("KbDocumentModel", () => {
       expect((await KbDocumentModel.findById(otherDoc.id))?.acl).toEqual([
         "org:*",
       ]);
+    });
+  });
+
+  describe("deleteCreatedBefore", () => {
+    test("deletes documents with createdAt before the cutoff", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const cutoff = new Date("2024-06-01T00:00:00Z");
+
+      const oldDoc = await insertDocumentAt(
+        connector.id, org.id, "old-doc", new Date("2024-01-01T00:00:00Z"),
+      );
+      const newDoc = await insertDocumentAt(
+        connector.id, org.id, "new-doc", new Date("2024-12-01T00:00:00Z"),
+      );
+
+      const deleted = await KbDocumentModel.deleteCreatedBefore({
+        connectorId: connector.id,
+        before: cutoff,
+      });
+
+      expect(deleted).toBe(1);
+      expect(await KbDocumentModel.findById(oldDoc.id)).toBeNull();
+      expect(await KbDocumentModel.findById(newDoc.id)).not.toBeNull();
+    });
+
+    test("spares documents with createdAt equal to or after the cutoff", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const cutoff = new Date("2024-06-01T00:00:00Z");
+
+      const onCutoff = await insertDocumentAt(
+        connector.id, org.id, "on-cutoff", cutoff,
+      );
+
+      const deleted = await KbDocumentModel.deleteCreatedBefore({
+        connectorId: connector.id,
+        before: cutoff,
+      });
+
+      expect(deleted).toBe(0);
+      expect(await KbDocumentModel.findById(onCutoff.id)).not.toBeNull();
+    });
+
+    test("only affects documents for the given connectorId", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector1 = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const connector2 = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const cutoff = new Date("2024-06-01T00:00:00Z");
+
+      const doc1 = await insertDocumentAt(
+        connector1.id, org.id, "doc-c1", new Date("2024-01-01T00:00:00Z"),
+      );
+      const doc2 = await insertDocumentAt(
+        connector2.id, org.id, "doc-c2", new Date("2024-01-01T00:00:00Z"),
+      );
+
+      await KbDocumentModel.deleteCreatedBefore({
+        connectorId: connector1.id,
+        before: cutoff,
+      });
+
+      expect(await KbDocumentModel.findById(doc1.id)).toBeNull();
+      expect(await KbDocumentModel.findById(doc2.id)).not.toBeNull();
+    });
+  });
+
+  describe("deleteOrphaned", () => {
+    test("deletes documents whose sourceId is not in seenSourceIds", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const runStart = new Date("2024-12-01T00:00:00Z");
+
+      const orphan = await insertDocumentAt(
+        connector.id, org.id, "orphan", new Date("2024-06-01T00:00:00Z"),
+      );
+      const alive = await insertDocumentAt(
+        connector.id, org.id, "alive", new Date("2024-06-01T00:00:00Z"),
+      );
+
+      const deleted = await KbDocumentModel.deleteOrphaned({
+        connectorId: connector.id,
+        seenSourceIds: ["alive"],
+        createdBefore: runStart,
+      });
+
+      expect(deleted).toBe(1);
+      expect(await KbDocumentModel.findById(orphan.id)).toBeNull();
+      expect(await KbDocumentModel.findById(alive.id)).not.toBeNull();
+    });
+
+    test("spares documents whose sourceId is in seenSourceIds", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const runStart = new Date("2024-12-01T00:00:00Z");
+
+      const doc = await insertDocumentAt(
+        connector.id, org.id, "kept", new Date("2024-06-01T00:00:00Z"),
+      );
+
+      const deleted = await KbDocumentModel.deleteOrphaned({
+        connectorId: connector.id,
+        seenSourceIds: ["kept"],
+        createdBefore: runStart,
+      });
+
+      expect(deleted).toBe(0);
+      expect(await KbDocumentModel.findById(doc.id)).not.toBeNull();
+    });
+
+    test("respects createdBefore guard — spares docs created after run start", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const runStart = new Date("2024-06-01T00:00:00Z");
+
+      // Created after run start — should be spared even though not in seenIds
+      const concurrentDoc = await insertDocumentAt(
+        connector.id, org.id, "concurrent", new Date("2024-12-01T00:00:00Z"),
+      );
+
+      const deleted = await KbDocumentModel.deleteOrphaned({
+        connectorId: connector.id,
+        seenSourceIds: ["something-else"],
+        createdBefore: runStart,
+      });
+
+      expect(deleted).toBe(0);
+      expect(await KbDocumentModel.findById(concurrentDoc.id)).not.toBeNull();
+    });
+
+    test("empty seenSourceIds is a complete no-op — returns 0 and deletes nothing", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const runStart = new Date("2024-12-01T00:00:00Z");
+
+      const doc = await insertDocumentAt(
+        connector.id, org.id, "safe", new Date("2024-06-01T00:00:00Z"),
+      );
+
+      const deleted = await KbDocumentModel.deleteOrphaned({
+        connectorId: connector.id,
+        seenSourceIds: [],
+        createdBefore: runStart,
+      });
+
+      expect(deleted).toBe(0);
+      expect(await KbDocumentModel.findById(doc.id)).not.toBeNull();
+    });
+
+    test("only affects documents for the given connectorId", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector1 = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const connector2 = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const runStart = new Date("2024-12-01T00:00:00Z");
+
+      const doc1 = await insertDocumentAt(
+        connector1.id, org.id, "orphan-c1", new Date("2024-01-01T00:00:00Z"),
+      );
+      const doc2 = await insertDocumentAt(
+        connector2.id, org.id, "orphan-c2", new Date("2024-01-01T00:00:00Z"),
+      );
+
+      await KbDocumentModel.deleteOrphaned({
+        connectorId: connector1.id,
+        seenSourceIds: ["other-doc"],
+        createdBefore: runStart,
+      });
+
+      expect(await KbDocumentModel.findById(doc1.id)).toBeNull();
+      expect(await KbDocumentModel.findById(doc2.id)).not.toBeNull();
     });
   });
 });

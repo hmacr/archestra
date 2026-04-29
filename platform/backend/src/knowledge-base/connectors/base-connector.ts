@@ -80,6 +80,15 @@ export abstract class BaseConnector implements Connector {
     endTime?: Date;
   }): AsyncGenerator<ConnectorSyncBatch>;
 
+  async *listAllSourceIds(_params: {
+    config: Record<string, unknown>;
+    credentials: ConnectorCredentials;
+    cursor?: string;
+  }): AsyncGenerator<{ sourceIds: string[]; cursor?: string; hasMore: boolean }> {
+    // No-op default: orphan pruning not supported by this connector.
+    // Override in a concrete connector to enable orphan pruning.
+  }
+
   protected buildBasicAuthHeader(email: string, apiToken: string): string {
     const encoded = Buffer.from(`${email}:${apiToken}`).toString("base64");
     return `Basic ${encoded}`;

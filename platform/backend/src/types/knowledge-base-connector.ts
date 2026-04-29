@@ -9,7 +9,8 @@ import { KnowledgeSourceVisibilitySchema } from "./knowledge-base";
 import {
   ConnectorCheckpointSchema,
   ConnectorConfigSchema,
-  ConnectorSyncStatusSchema,
+  ConnectorRunStatusSchema,
+  ConnectorRunTypeSchema,
   ConnectorTypeSchema,
 } from "./knowledge-connector";
 
@@ -35,7 +36,7 @@ export type UpdateKnowledgeBase = z.infer<typeof UpdateKnowledgeBaseSchema>;
 
 // ===== Knowledge Base Connector Schemas =====
 
-const NullableConnectorSyncStatusSchema = ConnectorSyncStatusSchema.nullable();
+const NullableConnectorRunStatusSchema = ConnectorRunStatusSchema.nullable();
 
 export const SelectKnowledgeBaseConnectorSchema = createSelectSchema(
   schema.knowledgeBaseConnectorsTable,
@@ -44,7 +45,8 @@ export const SelectKnowledgeBaseConnectorSchema = createSelectSchema(
     teamIds: z.array(z.string()),
     connectorType: ConnectorTypeSchema,
     config: ConnectorConfigSchema,
-    lastSyncStatus: NullableConnectorSyncStatusSchema,
+    lastSyncStatus: NullableConnectorRunStatusSchema,
+    lastPruneStatus: NullableConnectorRunStatusSchema,
   },
 );
 export const InsertKnowledgeBaseConnectorSchema = createInsertSchema(
@@ -55,7 +57,7 @@ export const InsertKnowledgeBaseConnectorSchema = createInsertSchema(
     connectorType: ConnectorTypeSchema,
     config: ConnectorConfigSchema,
     checkpoint: ConnectorCheckpointSchema.optional(),
-    lastSyncStatus: NullableConnectorSyncStatusSchema.optional(),
+    lastSyncStatus: NullableConnectorRunStatusSchema.optional(),
   },
 ).omit({ id: true, createdAt: true, updatedAt: true });
 export const UpdateKnowledgeBaseConnectorSchema = createUpdateSchema(
@@ -66,7 +68,8 @@ export const UpdateKnowledgeBaseConnectorSchema = createUpdateSchema(
     connectorType: ConnectorTypeSchema.optional(),
     config: ConnectorConfigSchema.optional(),
     checkpoint: ConnectorCheckpointSchema.nullable().optional(),
-    lastSyncStatus: NullableConnectorSyncStatusSchema.optional(),
+    lastSyncStatus: NullableConnectorRunStatusSchema.optional(),
+    lastPruneStatus: NullableConnectorRunStatusSchema.optional(),
   },
 ).pick({
   name: true,
@@ -80,6 +83,10 @@ export const UpdateKnowledgeBaseConnectorSchema = createUpdateSchema(
   lastSyncAt: true,
   lastSyncStatus: true,
   lastSyncError: true,
+  lastPruneAt: true,
+  cutoffDays: true,
+  lastPruneStatus: true,
+  lastPruneError: true,
   checkpoint: true,
 });
 
@@ -97,23 +104,31 @@ export type UpdateKnowledgeBaseConnector = z.infer<
 
 export const SelectConnectorRunSchema = createSelectSchema(
   schema.connectorRunsTable,
-  { status: ConnectorSyncStatusSchema },
+  { status: ConnectorRunStatusSchema, type: ConnectorRunTypeSchema },
 );
 export const SelectConnectorRunListSchema = SelectConnectorRunSchema.omit({
   logs: true,
 });
 export const InsertConnectorRunSchema = createInsertSchema(
   schema.connectorRunsTable,
-  { status: ConnectorSyncStatusSchema },
+  {
+    status: ConnectorRunStatusSchema,
+    type: ConnectorRunTypeSchema.optional(),
+  },
 ).omit({ id: true, createdAt: true });
 export const UpdateConnectorRunSchema = createUpdateSchema(
   schema.connectorRunsTable,
-  { status: ConnectorSyncStatusSchema.optional() },
+  {
+    status: ConnectorRunStatusSchema.optional(),
+    type: ConnectorRunTypeSchema.optional(),
+  },
 ).pick({
   status: true,
+  type: true,
   completedAt: true,
   documentsProcessed: true,
   documentsIngested: true,
+  documentsPruned: true,
   totalItems: true,
   error: true,
   logs: true,
@@ -126,3 +141,11 @@ export const UpdateConnectorRunSchema = createUpdateSchema(
 export type ConnectorRun = z.infer<typeof SelectConnectorRunSchema>;
 export type InsertConnectorRun = z.infer<typeof InsertConnectorRunSchema>;
 export type UpdateConnectorRun = z.infer<typeof UpdateConnectorRunSchema>;
+
+// ===== Prune Checkpoint =====
+
+export type PruneCheckpoint = {
+  cursor?: string;
+  seenIds: string[];
+  cutoffCompleted: boolean;
+};

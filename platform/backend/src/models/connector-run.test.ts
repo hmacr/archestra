@@ -922,4 +922,188 @@ describe("ConnectorRunModel", () => {
       expect(result?.status).toBe("failed");
     });
   });
+
+  describe("type and documentsPruned", () => {
+    test("creates a run with type 'sync' by default", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      const run = await ConnectorRunModel.create({
+        connectorId: connector.id,
+        status: "running",
+        startedAt: new Date(),
+      });
+
+      expect(run.type).toBe("sync");
+      expect(run.documentsPruned).toBeNull();
+    });
+
+    test("creates a run with type 'prune'", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      const run = await ConnectorRunModel.create({
+        connectorId: connector.id,
+        type: "prune",
+        status: "running",
+        startedAt: new Date(),
+      });
+
+      expect(run.type).toBe("prune");
+    });
+
+    test("updates documentsPruned on a run", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      const run = await ConnectorRunModel.create({
+        connectorId: connector.id,
+        type: "prune",
+        status: "running",
+        startedAt: new Date(),
+      });
+
+      const updated = await ConnectorRunModel.update(run.id, {
+        documentsPruned: 42,
+      });
+
+      expect(updated?.documentsPruned).toBe(42);
+    });
+  });
+
+  describe("findPartialByConnector", () => {
+    test("returns the most recent partial prune run for the connector", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      await ConnectorRunModel.create({
+        connectorId: connector.id,
+        type: "prune",
+        status: "partial",
+        startedAt: new Date("2024-01-01T00:00:00Z"),
+      });
+      const run2 = await ConnectorRunModel.create({
+        connectorId: connector.id,
+        type: "prune",
+        status: "partial",
+        startedAt: new Date("2024-01-02T00:00:00Z"),
+      });
+
+      const found = await ConnectorRunModel.findPartialByConnector(
+        connector.id,
+        "prune",
+      );
+
+      expect(found).not.toBeNull();
+      expect(found?.id).toBe(run2.id);
+    });
+
+    test("returns null when no partial run exists", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      const found = await ConnectorRunModel.findPartialByConnector(
+        connector.id,
+        "prune",
+      );
+
+      expect(found).toBeNull();
+    });
+
+    test("returns null when a partial run exists for a different connector", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector1 = await makeKnowledgeBaseConnector(kb.id, org.id);
+      const connector2 = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      await ConnectorRunModel.create({
+        connectorId: connector1.id,
+        type: "prune",
+        status: "partial",
+        startedAt: new Date(),
+      });
+
+      const found = await ConnectorRunModel.findPartialByConnector(
+        connector2.id,
+        "prune",
+      );
+
+      expect(found).toBeNull();
+    });
+  });
+
+  describe("interruptActiveRuns", () => {
+    test("uses neutral error message 'Superseded by a new run'", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      const run = await ConnectorRunModel.create({
+        connectorId: connector.id,
+        status: "running",
+        startedAt: new Date(),
+      });
+
+      await ConnectorRunModel.interruptActiveRuns(connector.id);
+
+      const updated = await ConnectorRunModel.findById(run.id);
+      expect(updated?.status).toBe("failed");
+      expect(updated?.error).toBe("Superseded by a new run");
+    });
+
+    test("does NOT touch partial runs", async ({
+      makeOrganization,
+      makeKnowledgeBase,
+      makeKnowledgeBaseConnector,
+    }) => {
+      const org = await makeOrganization();
+      const kb = await makeKnowledgeBase(org.id);
+      const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
+
+      const partialRun = await ConnectorRunModel.create({
+        connectorId: connector.id,
+        type: "prune",
+        status: "partial",
+        startedAt: new Date(),
+      });
+
+      await ConnectorRunModel.interruptActiveRuns(connector.id);
+
+      const afterInterrupt = await ConnectorRunModel.findById(partialRun.id);
+      expect(afterInterrupt?.status).toBe("partial");
+    });
+  });
 });

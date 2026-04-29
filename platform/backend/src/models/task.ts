@@ -138,13 +138,16 @@ class TaskModel {
   }
 
   static async hasPendingOrProcessing(
-    taskType: string,
+    taskTypes: string | string[],
     connectorId: string,
   ): Promise<boolean> {
+    const types = (Array.isArray(taskTypes) ? taskTypes : [taskTypes])
+      .map((type) => `'${type}'`)
+      .join(", ");
     const { rows } = await db.execute<{ exists: boolean }>(sql`
       SELECT EXISTS (
         SELECT 1 FROM tasks
-        WHERE task_type = ${taskType}
+        WHERE task_type in (${types})
           AND status IN ('pending', 'processing')
           AND payload->>'connectorId' = ${connectorId}
       ) AS exists
