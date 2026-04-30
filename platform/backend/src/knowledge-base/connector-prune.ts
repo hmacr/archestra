@@ -54,42 +54,42 @@ class ConnectorPruneService {
     let run: Awaited<ReturnType<typeof ConnectorRunModel.create>>;
     let cursor: string | undefined;
     let seenIds: string[];
-    let cutoffCompleted: boolean;
 
     if (partialRun) {
-      await ConnectorRunModel.update(partialRun.id, { status: "running" });
-      await KnowledgeBaseConnectorModel.update(connectorId, {
-        lastPruneStatus: "running",
-        lastPruneError: null,
-      });
+      await Promise.all([
+        await ConnectorRunModel.update(partialRun.id, { status: "running" }),
+        await KnowledgeBaseConnectorModel.update(connectorId, {
+          lastPruneStatus: "running",
+          lastPruneError: null,
+        }),
+      ]);
       run = partialRun;
       const checkpoint = (partialRun.checkpoint ?? {}) as PruneCheckpoint;
       cursor = checkpoint.cursor;
       seenIds = checkpoint.seenIds ?? [];
-      cutoffCompleted = checkpoint.cutoffCompleted ?? false;
       log.info(
         {
           connectorId,
           runId: run.id,
           seenCount: seenIds.length,
-          cutoffCompleted,
         },
         "Resuming partial prune run",
       );
     } else {
-      run = await ConnectorRunModel.create({
-        connectorId,
-        type: "prune",
-        status: "running",
-        startedAt: new Date(),
-      });
-      await KnowledgeBaseConnectorModel.update(connectorId, {
-        lastPruneStatus: "running",
-        lastPruneError: null,
-      });
+      [run] = await Promise.all([
+        await ConnectorRunModel.create({
+          connectorId,
+          type: "prune",
+          status: "running",
+          startedAt: new Date(),
+        }),
+        await KnowledgeBaseConnectorModel.update(connectorId, {
+          lastPruneStatus: "running",
+          lastPruneError: null,
+        }),
+      ]);
       cursor = undefined;
       seenIds = [];
-      cutoffCompleted = false;
     }
 
     const runLog = log.child({
@@ -108,32 +108,6 @@ class ConnectorPruneService {
     let documentsPruned = run.documentsPruned ?? 0;
 
     try {
-      // Phase 1: Cutoff prune
-      if (
-        !cutoffCompleted &&
-        connector.cutoffDays !== null &&
-        connector.cutoffDays !== undefined
-      ) {
-        const cutoffDate = new Date(
-          run.startedAt.getTime() - connector.cutoffDays * 24 * 60 * 60 * 1000,
-        );
-        const pruned = await KbDocumentModel.deleteCreatedBefore({
-          connectorId,
-          before: cutoffDate,
-        });
-        documentsPruned += pruned;
-        cutoffCompleted = true;
-        await ConnectorRunModel.update(run.id, {
-          checkpoint: { cursor, seenIds, cutoffCompleted: true },
-          documentsPruned,
-        });
-        runLog.info(
-          { cutoffDays: connector.cutoffDays, cutoffDate, pruned },
-          "Cutoff prune completed",
-        );
-      }
-
-      // Phase 2: Orphan prune
       const generator = connectorImpl.listAllSourceIds?.({
         config: connector.config as Record<string, unknown>,
         credentials,
@@ -147,7 +121,6 @@ class ConnectorPruneService {
           checkpoint: {
             cursor: batch.cursor,
             seenIds,
-            cutoffCompleted: true,
           },
         });
 

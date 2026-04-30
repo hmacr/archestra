@@ -94,48 +94,7 @@ describe("ConnectorPruneService", () => {
     ).rejects.toThrow("Connector not found");
   });
 
-  test("cutoff-only run: deleteCreatedBefore called, no orphan deletion", async ({
-    makeOrganization,
-    makeKnowledgeBase,
-    makeKnowledgeBaseConnector,
-  }) => {
-    const org = await makeOrganization();
-    const kb = await makeKnowledgeBase(org.id);
-    const secretId = await createSecret();
-    const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
-    await KnowledgeBaseConnectorModel.update(connector.id, {
-      secretId,
-      cutoffDays: 30,
-    });
-
-    setupSecret();
-    const mockImpl = makeNoOpConnector();
-    mockGetConnector.mockReturnValue(mockImpl);
-
-    const runStart = new Date();
-    const oldDate = new Date(runStart.getTime() - 60 * 24 * 60 * 60 * 1000); // 60 days ago
-    const oldDoc = await insertDocumentAt(
-      connector.id,
-      org.id,
-      "old-1",
-      oldDate,
-    );
-    const recentDate = new Date(runStart.getTime() - 5 * 24 * 60 * 60 * 1000); // 5 days ago
-    const recentDoc = await insertDocumentAt(
-      connector.id,
-      org.id,
-      "recent-1",
-      recentDate,
-    );
-
-    const result = await connectorPruneService.executePrune(connector.id);
-
-    expect(result.status).toBe("success");
-    expect(await KbDocumentModel.findById(oldDoc.id)).toBeNull();
-    expect(await KbDocumentModel.findById(recentDoc.id)).not.toBeNull();
-  });
-
-  test("orphan-only run: deleteOrphaned called when cutoffDays is null", async ({
+  test("deleteOrphaned called on fetching all documents", async ({
     makeOrganization,
     makeKnowledgeBase,
     makeKnowledgeBaseConnector,
@@ -145,7 +104,6 @@ describe("ConnectorPruneService", () => {
     const secretId = await createSecret();
     const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
     await KnowledgeBaseConnectorModel.update(connector.id, { secretId });
-    // cutoffDays stays null
 
     setupSecret();
     const mockImpl = makeConnectorWithSourceIds([
@@ -172,100 +130,6 @@ describe("ConnectorPruneService", () => {
     expect(result.status).toBe("success");
     expect(await KbDocumentModel.findById(orphan.id)).toBeNull();
     expect(await KbDocumentModel.findById(alive.id)).not.toBeNull();
-  });
-
-  test("both phases run when cutoffDays is set and listAllSourceIds is implemented", async ({
-    makeOrganization,
-    makeKnowledgeBase,
-    makeKnowledgeBaseConnector,
-  }) => {
-    const org = await makeOrganization();
-    const kb = await makeKnowledgeBase(org.id);
-    const secretId = await createSecret();
-    const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
-    await KnowledgeBaseConnectorModel.update(connector.id, {
-      secretId,
-      cutoffDays: 30,
-    });
-
-    setupSecret();
-    const mockImpl = makeConnectorWithSourceIds([
-      { sourceIds: ["alive"], cursor: undefined, hasMore: false },
-    ]);
-    mockGetConnector.mockReturnValue(mockImpl);
-
-    const runStart = new Date();
-    const oldDate = new Date(runStart.getTime() - 60 * 24 * 60 * 60 * 1000);
-    const recentDate = new Date(runStart.getTime() - 5_000);
-
-    const oldDoc = await insertDocumentAt(
-      connector.id,
-      org.id,
-      "old-doc",
-      oldDate,
-    );
-    const orphan = await insertDocumentAt(
-      connector.id,
-      org.id,
-      "orphan",
-      recentDate,
-    );
-    const alive = await insertDocumentAt(
-      connector.id,
-      org.id,
-      "alive",
-      recentDate,
-    );
-
-    const result = await connectorPruneService.executePrune(connector.id);
-
-    expect(result.status).toBe("success");
-    expect(await KbDocumentModel.findById(oldDoc.id)).toBeNull();
-    expect(await KbDocumentModel.findById(orphan.id)).toBeNull();
-    expect(await KbDocumentModel.findById(alive.id)).not.toBeNull();
-  });
-
-  test("phase 1 is skipped on resume when cutoffCompleted is true in checkpoint", async ({
-    makeOrganization,
-    makeKnowledgeBase,
-    makeKnowledgeBaseConnector,
-  }) => {
-    const org = await makeOrganization();
-    const kb = await makeKnowledgeBase(org.id);
-    const secretId = await createSecret();
-    const connector = await makeKnowledgeBaseConnector(kb.id, org.id);
-    await KnowledgeBaseConnectorModel.update(connector.id, {
-      secretId,
-      cutoffDays: 30,
-    });
-
-    setupSecret();
-    const mockImpl = makeNoOpConnector();
-    mockGetConnector.mockReturnValue(mockImpl);
-
-    // Pre-create a partial prune run with cutoffCompleted: true
-    const partialRun = await ConnectorRunModel.create({
-      connectorId: connector.id,
-      type: "prune",
-      status: "partial",
-      startedAt: new Date(),
-      checkpoint: { cursor: undefined, seenIds: [], cutoffCompleted: true },
-    });
-
-    const runStart = new Date(partialRun.startedAt.getTime());
-    const oldDate = new Date(runStart.getTime() - 60 * 24 * 60 * 60 * 1000);
-    const oldDoc = await insertDocumentAt(
-      connector.id,
-      org.id,
-      "old-skip",
-      oldDate,
-    );
-
-    const result = await connectorPruneService.executePrune(connector.id);
-
-    expect(result.status).toBe("success");
-    // Old doc should NOT be deleted since cutoff phase is skipped
-    expect(await KbDocumentModel.findById(oldDoc.id)).not.toBeNull();
   });
 
   test("resume from partial run: uses saved checkpoint seenIds and cursor", async ({
@@ -295,7 +159,6 @@ describe("ConnectorPruneService", () => {
       checkpoint: {
         cursor: "page-2",
         seenIds: ["alive1"],
-        cutoffCompleted: true,
       },
     });
 

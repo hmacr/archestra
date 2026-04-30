@@ -1,5 +1,5 @@
 {
-  "id": "ae06cada-302f-48ea-8ab3-3a0ce4114763",
+  "id": "282219b2-6ea6-4b5f-b185-99674aa87d5e",
   "prevId": "3962e239-e49a-4648-bd19-17f62c295695",
   "version": "7",
   "dialect": "postgresql",
@@ -3638,12 +3638,6 @@
         "last_prune_error": {
           "name": "last_prune_error",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cutoff_days": {
-          "name": "cutoff_days",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

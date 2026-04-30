@@ -85,7 +85,6 @@ export const UpdateKnowledgeBaseConnectorSchema = createUpdateSchema(
   lastSyncStatus: true,
   lastSyncError: true,
   lastPruneAt: true,
-  cutoffDays: true,
   lastPruneStatus: true,
   lastPruneError: true,
   checkpoint: true,
@@ -148,5 +147,4 @@ export type UpdateConnectorRun = z.infer<typeof UpdateConnectorRunSchema>;
 export type PruneCheckpoint = {
   cursor?: string;
   seenIds: string[];
-  cutoffCompleted: boolean;
 };

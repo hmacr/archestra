@@ -1,7 +1,6 @@
 import {
   boolean,
   index,
-  integer,
   jsonb,
   pgTable,
   text,
@@ -43,7 +42,6 @@ const knowledgeBaseConnectorsTable = pgTable(
     lastPruneAt: timestamp("last_prune_at", { mode: "date" }),
     lastPruneStatus: text("last_prune_status").$type<ConnectorRunStatus>(),
     lastPruneError: text("last_prune_error"),
-    cutoffDays: integer("cutoff_days"),
     checkpoint: jsonb("checkpoint").$type<ConnectorCheckpoint>(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "date" })
