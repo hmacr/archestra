@@ -600,4 +600,184 @@ describe("DropboxConnector", () => {
       );
     });
   });
+
+  describe("listAllSourceIds", () => {
+    it("yields file IDs from a single page and signals completion", async () => {
+      const files = [
+        makeFile("id:aaa", "readme.md"),
+        makeFile("id:bbb", "notes.txt"),
+      ];
+      mockFilesListFolder.mockResolvedValueOnce(
+        makeListFolderResult(files, { cursor: "cursor-done", hasMore: false }),
+      );
+
+      const connector = new DropboxConnector();
+      const batches = [];
+      for await (const batch of connector.listAllSourceIds({
+        config: {},
+        credentials,
+      })) {
+        batches.push(batch);
+      }
+
+      expect(batches).toHaveLength(1);
+      expect(batches[0].sourceIds).toEqual(["id:aaa", "id:bbb"]);
+      expect(batches[0].hasMore).toBe(false);
+    });
+
+    it("calls filesListFolder with recursive: true", async () => {
+      mockFilesListFolder.mockResolvedValueOnce(
+        makeListFolderResult([], { cursor: "c", hasMore: false }),
+      );
+
+      const connector = new DropboxConnector();
+      for await (const _ of connector.listAllSourceIds({
+        config: { rootPath: "/team-docs" },
+        credentials,
+      })) {
+        // drain
+      }
+
+      expect(mockFilesListFolder).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "/team-docs", recursive: true }),
+      );
+    });
+
+    it("resumes with filesListFolderContinue when cursor is provided", async () => {
+      mockFilesListFolderContinue.mockResolvedValueOnce(
+        makeContinueResult([makeFile("id:ccc", "resumed.md")], {
+          cursor: "cursor-resumed",
+          hasMore: false,
+        }),
+      );
+
+      const connector = new DropboxConnector();
+      const batches = [];
+      for await (const batch of connector.listAllSourceIds({
+        config: {},
+        credentials,
+        cursor: "cursor-saved",
+      })) {
+        batches.push(batch);
+      }
+
+      expect(mockFilesListFolder).not.toHaveBeenCalled();
+      expect(mockFilesListFolderContinue).toHaveBeenCalledWith({
+        cursor: "cursor-saved",
+      });
+      expect(batches[0].sourceIds).toEqual(["id:ccc"]);
+    });
+
+    it("pages through multiple Dropbox pages and threads cursor correctly", async () => {
+      const page1Files = [makeFile("id:p1a", "p1a.md")];
+      const page2Files = [makeFile("id:p2a", "p2a.md")];
+
+      mockFilesListFolder.mockResolvedValueOnce(
+        makeListFolderResult(page1Files, {
+          cursor: "cursor-page1",
+          hasMore: true,
+        }),
+      );
+      mockFilesListFolderContinue.mockResolvedValueOnce(
+        makeContinueResult(page2Files, {
+          cursor: "cursor-page2",
+          hasMore: false,
+        }),
+      );
+
+      const connector = new DropboxConnector();
+      const batches = [];
+      for await (const batch of connector.listAllSourceIds({
+        config: {},
+        credentials,
+      })) {
+        batches.push(batch);
+      }
+
+      expect(batches).toHaveLength(2);
+      expect(batches[0].sourceIds).toEqual(["id:p1a"]);
+      expect(batches[0].cursor).toBe("cursor-page1");
+      expect(batches[0].hasMore).toBe(true);
+      expect(batches[1].sourceIds).toEqual(["id:p2a"]);
+      expect(batches[1].hasMore).toBe(false);
+    });
+
+    it("yields empty batch with hasMore: false when folder has no matching files", async () => {
+      mockFilesListFolder.mockResolvedValueOnce(
+        makeListFolderResult([], { cursor: "cursor-empty", hasMore: false }),
+      );
+
+      const connector = new DropboxConnector();
+      const batches = [];
+      for await (const batch of connector.listAllSourceIds({
+        config: {},
+        credentials,
+      })) {
+        batches.push(batch);
+      }
+
+      expect(batches).toHaveLength(1);
+      expect(batches[0].sourceIds).toEqual([]);
+      expect(batches[0].hasMore).toBe(false);
+    });
+
+    it("respects fileTypes config and excludes non-matching files", async () => {
+      const files = [
+        makeFile("id:md", "doc.md"),
+        makeFile("id:png", "image.png"),
+        makeFile("id:txt", "notes.txt"),
+      ];
+      mockFilesListFolder.mockResolvedValueOnce(
+        makeListFolderResult(files, { cursor: "c", hasMore: false }),
+      );
+
+      const connector = new DropboxConnector();
+      const batches = [];
+      for await (const batch of connector.listAllSourceIds({
+        config: { fileTypes: [".md"] },
+        credentials,
+      })) {
+        batches.push(batch);
+      }
+
+      expect(batches[0].sourceIds).toEqual(["id:md"]);
+    });
+
+    it("chunks a large page into multiple batches", async () => {
+      const files = Array.from({ length: 5 }, (_, i) =>
+        makeFile(`id:f${i}`, `file${i}.md`),
+      );
+      mockFilesListFolder.mockResolvedValueOnce(
+        makeListFolderResult(files, { cursor: "cursor-done", hasMore: false }),
+      );
+
+      const connector = new DropboxConnector();
+      const batches = [];
+      for await (const batch of connector.listAllSourceIds({
+        config: { batchSize: 2 },
+        credentials,
+      })) {
+        batches.push(batch);
+      }
+
+      expect(batches).toHaveLength(3);
+      expect(batches[0].sourceIds).toHaveLength(2);
+      expect(batches[0].hasMore).toBe(true);
+      expect(batches[1].sourceIds).toHaveLength(2);
+      expect(batches[1].hasMore).toBe(true);
+      expect(batches[2].sourceIds).toHaveLength(1);
+      expect(batches[2].hasMore).toBe(false);
+    });
+
+    it("throws when config is invalid", async () => {
+      const connector = new DropboxConnector();
+      const generator = connector.listAllSourceIds({
+        config: { batchSize: "not-a-number" },
+        credentials,
+      });
+      await expect(generator.next()).rejects.toThrow(
+        "Invalid Dropbox configuration",
+      );
+    });
+  });
 });

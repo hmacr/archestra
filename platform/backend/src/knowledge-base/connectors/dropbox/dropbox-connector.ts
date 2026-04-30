@@ -136,6 +136,80 @@ export class DropboxConnector extends BaseConnector {
     );
   }
 
+  async *listAllSourceIds(params: {
+    config: Record<string, unknown>;
+    credentials: ConnectorCredentials;
+    cursor?: string;
+  }): AsyncGenerator<{
+    sourceIds: string[];
+    cursor?: string;
+    hasMore: boolean;
+  }> {
+    const parsed = parseDropboxConfig(params.config);
+    if (!parsed) {
+      throw new Error("Invalid Dropbox configuration");
+    }
+
+    const batchSize = parsed.batchSize ?? DEFAULT_BATCH_SIZE;
+    const rootPath = parsed.rootPath
+      ? parsed.rootPath.startsWith("/")
+        ? parsed.rootPath
+        : `/${parsed.rootPath}`
+      : "";
+    const fileTypes = parsed.fileTypes ?? [];
+
+    const dbx = getDropboxClient(params.credentials);
+
+    let cursor = params.cursor;
+    let hasMore = true;
+
+    while (hasMore) {
+      await this.rateLimit();
+
+      let entries: DropboxEntry[];
+      let nextCursor: string;
+      let more: boolean;
+
+      if (cursor) {
+        const result = await dbx.filesListFolderContinue({ cursor });
+        entries = result.result.entries;
+        nextCursor = result.result.cursor;
+        more = result.result.has_more;
+      } else {
+        const result = await dbx.filesListFolder({
+          path: rootPath,
+          recursive: true,
+          include_deleted: false,
+          include_has_explicit_shared_members: false,
+        });
+        entries = result.result.entries;
+        nextCursor = result.result.cursor;
+        more = result.result.has_more;
+      }
+
+      hasMore = more;
+      cursor = nextCursor;
+
+      const files = filterFiles(entries, fileTypes);
+      const sourceIds = files.map((f) => f.id);
+
+      if (sourceIds.length === 0 && !more) {
+        yield { sourceIds: [], cursor: undefined, hasMore: false };
+        break;
+      }
+
+      for (let i = 0; i < sourceIds.length; i += batchSize) {
+        const batchIds = sourceIds.slice(i, i + batchSize);
+        const isLastChunk = i + batchSize >= sourceIds.length;
+        yield {
+          sourceIds: batchIds,
+          cursor: nextCursor,
+          hasMore: more || !isLastChunk,
+        };
+      }
+    }
+  }
+
   // ===== Private methods =====
 
   private async *syncFolderTree(
