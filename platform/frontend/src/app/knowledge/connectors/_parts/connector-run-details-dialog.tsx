@@ -36,12 +36,12 @@ export function ConnectorRunDetailsDialog({
       <DialogContent className="max-w-3xl">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
-            Sync Run Details
+            {run?.type === "prune" ? "Prune" : "Sync"} Run Details
             {run && <ConnectorStatusBadge status={run.status} />}
           </DialogTitle>
           <DialogDescription>
             Inspect the latest status, progress, and any connector errors for
-            this sync run.
+            this {run?.type === "prune" ? "prune" : "sync"} run.
           </DialogDescription>
         </DialogHeader>
 
@@ -60,18 +60,27 @@ export function ConnectorRunDetailsDialog({
                     ? formatDate({ date: run.completedAt })
                     : "-"}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Progress:</span>{" "}
-                  {run.documentsProcessed ?? 0}
-                  {run.totalItems != null &&
-                    run.totalItems > 0 &&
-                    ` / ${run.totalItems}`}{" "}
-                  processed
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Ingested:</span>{" "}
-                  {run.documentsIngested ?? 0}
-                </div>
+                {run.type === "sync" ? (
+                  <>
+                    <div>
+                      <span className="text-muted-foreground">Progress:</span>{" "}
+                      {run.documentsProcessed ?? 0}
+                      {run.totalItems != null &&
+                        run.totalItems > 0 &&
+                        ` / ${run.totalItems}`}{" "}
+                      processed
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Ingested:</span>{" "}
+                      {run.documentsIngested ?? 0}
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <span className="text-muted-foreground">Pruned:</span>{" "}
+                    {run.documentsPruned ?? 0}
+                  </div>
+                )}
                 {(run.itemErrors ?? 0) > 0 && (
                   <div>
                     <span className="text-muted-foreground">Item errors:</span>{" "}
@@ -80,25 +89,27 @@ export function ConnectorRunDetailsDialog({
                 )}
               </div>
 
-              {/* Progress bar when totalItems is known */}
-              {run.totalItems != null && run.totalItems > 0 && (
-                <div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, ((run.documentsProcessed ?? 0) / run.totalItems) * 100)}%`,
-                      }}
-                    />
+              {/* Progress bar — sync runs only */}
+              {run.type === "sync" &&
+                run.totalItems != null &&
+                run.totalItems > 0 && (
+                  <div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, ((run.documentsProcessed ?? 0) / run.totalItems) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {Math.round(
+                        ((run.documentsProcessed ?? 0) / run.totalItems) * 100,
+                      )}
+                      %
+                    </div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {Math.round(
-                      ((run.documentsProcessed ?? 0) / run.totalItems) * 100,
-                    )}
-                    %
-                  </div>
-                </div>
-              )}
+                )}
 
               {/* Error section */}
               {run.error && (
@@ -123,7 +134,7 @@ export function ConnectorRunDetailsDialog({
             </div>
           ) : (
             <div className="text-sm text-muted-foreground">
-              Loading sync run details...
+              Loading run details...
             </div>
           )}
         </DialogBody>
