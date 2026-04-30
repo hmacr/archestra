@@ -141,10 +141,3 @@ export const UpdateConnectorRunSchema = createUpdateSchema(
 export type ConnectorRun = z.infer<typeof SelectConnectorRunSchema>;
 export type InsertConnectorRun = z.infer<typeof InsertConnectorRunSchema>;
 export type UpdateConnectorRun = z.infer<typeof UpdateConnectorRunSchema>;
-
-// ===== Prune Checkpoint =====
-
-export type PruneCheckpoint = {
-  cursor?: string;
-  seenIds: string[];
-};

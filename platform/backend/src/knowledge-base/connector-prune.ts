@@ -5,7 +5,6 @@ import {
   KbDocumentModel,
   KnowledgeBaseConnectorModel,
 } from "@/models";
-import type { PruneCheckpoint } from "@/types";
 import { loadConnectorCredentials } from "./connector-credentials";
 import {
   BaseConnector,
@@ -52,8 +51,6 @@ class ConnectorPruneService {
     );
 
     let run: Awaited<ReturnType<typeof ConnectorRunModel.create>>;
-    let cursor: string | undefined;
-    let seenIds: string[];
 
     if (partialRun) {
       await Promise.all([
@@ -64,14 +61,10 @@ class ConnectorPruneService {
         }),
       ]);
       run = partialRun;
-      const checkpoint = (partialRun.checkpoint ?? {}) as PruneCheckpoint;
-      cursor = checkpoint.cursor;
-      seenIds = checkpoint.seenIds ?? [];
       log.info(
         {
           connectorId,
           runId: run.id,
-          seenCount: seenIds.length,
         },
         "Resuming partial prune run",
       );
@@ -90,8 +83,6 @@ class ConnectorPruneService {
           lastPruneError: null,
         }),
       ]);
-      cursor = undefined;
-      seenIds = [];
     }
 
     const runLog = log.child({
@@ -108,21 +99,20 @@ class ConnectorPruneService {
     const createdBefore = run.startedAt;
     const startTime = Date.now();
 
+    const sourceIds: string[] = run.checkpoint?.sourceIds ?? [];
+
     try {
       const generator = connectorImpl.listAllSourceIds?.({
         config: connector.config as Record<string, unknown>,
         credentials,
-        cursor,
+        checkpoint: run.checkpoint as Record<string, unknown> | null,
       });
 
       for await (const batch of generator ?? []) {
-        seenIds.push(...batch.sourceIds);
+        sourceIds.push(...batch.sourceIds);
 
         await ConnectorRunModel.update(run.id, {
-          checkpoint: {
-            cursor: batch.cursor,
-            seenIds,
-          },
+          checkpoint: { ...batch.checkpoint, sourceIds },
         });
 
         if (options?.maxDurationMs && batch.hasMore) {
@@ -138,58 +128,60 @@ class ConnectorPruneService {
               lastPruneStatus: "partial",
             });
             runLog.info(
-              { elapsedMs: elapsed, seenCount: seenIds.length },
+              { elapsedMs: elapsed, sourceCount: sourceIds.length },
               "Time budget exceeded, stopping prune early for continuation",
             );
             return { runId: run.id, status: "partial" };
           }
         }
-
-        cursor = batch.cursor;
       }
 
       let documentsPruned = 0;
 
       // Full enumeration complete — safe to delete orphans
-      if (seenIds.length > 0) {
+      if (sourceIds.length > 0) {
         documentsPruned = await KbDocumentModel.deleteOrphaned({
           connectorId,
-          seenSourceIds: seenIds,
+          seenSourceIds: sourceIds,
           createdBefore,
         });
         runLog.info(
-          { pruned: documentsPruned, seenCount: seenIds.length },
+          { pruned: documentsPruned, sourceCount: sourceIds.length },
           "Orphan prune completed",
         );
       }
 
-      await ConnectorRunModel.update(run.id, {
-        status: "success",
-        completedAt: new Date(),
-        documentsPruned,
-        logs: options?.getLogOutput?.() ?? null,
-      });
-      await KnowledgeBaseConnectorModel.update(connectorId, {
-        lastPruneAt: new Date(),
-        lastPruneStatus: "success",
-        lastPruneError: null,
-      });
+      await Promise.all([
+        ConnectorRunModel.update(run.id, {
+          status: "success",
+          completedAt: new Date(),
+          documentsPruned,
+          logs: options?.getLogOutput?.() ?? null,
+        }),
+        KnowledgeBaseConnectorModel.update(connectorId, {
+          lastPruneAt: new Date(),
+          lastPruneStatus: "success",
+          lastPruneError: null,
+        }),
+      ]);
 
       runLog.info({ documentsPruned }, "Prune completed successfully");
       return { runId: run.id, status: "success" };
     } catch (error) {
       const errorMessage = extractErrorMessage(error);
-      await ConnectorRunModel.update(run.id, {
-        status: "failed",
-        completedAt: new Date(),
-        error: errorMessage,
-        logs: options?.getLogOutput?.() ?? null,
-      });
-      await KnowledgeBaseConnectorModel.update(connectorId, {
-        lastPruneAt: new Date(),
-        lastPruneStatus: "failed",
-        lastPruneError: errorMessage,
-      });
+      await Promise.all([
+        ConnectorRunModel.update(run.id, {
+          status: "failed",
+          completedAt: new Date(),
+          error: errorMessage,
+          logs: options?.getLogOutput?.() ?? null,
+        }),
+        KnowledgeBaseConnectorModel.update(connectorId, {
+          lastPruneAt: new Date(),
+          lastPruneStatus: "failed",
+          lastPruneError: errorMessage,
+        }),
+      ]);
       runLog.error({ error: errorMessage }, "Prune failed");
       return { runId: run.id, status: "failed" };
     }

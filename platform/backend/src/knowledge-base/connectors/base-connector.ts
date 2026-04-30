@@ -4,6 +4,7 @@ import type {
   Connector,
   ConnectorCredentials,
   ConnectorItemFailure,
+  ConnectorPruneBatch,
   ConnectorSyncBatch,
   ConnectorType,
 } from "@/types";
@@ -84,11 +85,7 @@ export abstract class BaseConnector implements Connector {
     config: Record<string, unknown>;
     credentials: ConnectorCredentials;
     cursor?: string;
-  }): AsyncGenerator<{
-    sourceIds: string[];
-    cursor?: string;
-    hasMore: boolean;
-  }> {
+  }): AsyncGenerator<ConnectorPruneBatch> {
     // No-op by default.
     // Override in a concrete connector to enable orphan pruning.
   }

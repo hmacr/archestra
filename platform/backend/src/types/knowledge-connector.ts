@@ -66,6 +66,10 @@ const connectorUrlSchema = z
   .transform(ensureProtocol)
   .transform(stripTrailingSlashes);
 
+const BasePruneCheckpointSchema = z.object({
+  sourceIds: z.array(z.string()).optional(),
+});
+
 // ===== Jira Config & Checkpoint =====
 
 export const JiraConfigSchema = z.object({
@@ -87,6 +91,11 @@ export const JiraCheckpointSchema = z.object({
   lastRawUpdatedAt: z.string().optional(),
 });
 export type JiraCheckpoint = z.infer<typeof JiraCheckpointSchema>;
+
+export const JiraPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: JIRA,
+});
+export type JiraPruneCheckpoint = z.infer<typeof JiraPruneCheckpointSchema>;
 
 // ===== Confluence Config & Checkpoint =====
 
@@ -111,6 +120,15 @@ export const ConfluenceCheckpointSchema = z.object({
 });
 export type ConfluenceCheckpoint = z.infer<typeof ConfluenceCheckpointSchema>;
 
+export const ConfluencePruneCheckpointSchema = BasePruneCheckpointSchema.extend(
+  {
+    type: CONFLUENCE,
+  },
+);
+export type ConfluencePruneCheckpoint = z.infer<
+  typeof ConfluencePruneCheckpointSchema
+>;
+
 // ===== GitHub Config & Checkpoint =====
 
 export const GithubConfigSchema = z.object({
@@ -131,6 +149,11 @@ export const GithubCheckpointSchema = z.object({
 });
 export type GithubCheckpoint = z.infer<typeof GithubCheckpointSchema>;
 
+export const GithubPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: GITHUB,
+});
+export type GithubPruneCheckpoint = z.infer<typeof GithubPruneCheckpointSchema>;
+
 // ===== GitLab Config & Checkpoint =====
 
 export const GitlabConfigSchema = z.object({
@@ -150,6 +173,11 @@ export const GitlabCheckpointSchema = z.object({
   lastSyncedAt: z.string().optional(),
 });
 export type GitlabCheckpoint = z.infer<typeof GitlabCheckpointSchema>;
+
+export const GitlabPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: GITLAB,
+});
+export type GitlabPruneCheckpoint = z.infer<typeof GitlabPruneCheckpointSchema>;
 
 // ===== ServiceNow Config & Checkpoint =====
 
@@ -175,6 +203,15 @@ export const ServiceNowCheckpointSchema = z.object({
 });
 export type ServiceNowCheckpoint = z.infer<typeof ServiceNowCheckpointSchema>;
 
+export const ServiceNowPruneCheckpointSchema = BasePruneCheckpointSchema.extend(
+  {
+    type: SERVICENOW,
+  },
+);
+export type ServiceNowPruneCheckpoint = z.infer<
+  typeof ServiceNowPruneCheckpointSchema
+>;
+
 // ===== Notion Config & Checkpoint =====
 
 export const NotionConfigSchema = z.object({
@@ -191,6 +228,11 @@ export const NotionCheckpointSchema = z.object({
   lastEditedAt: z.string().optional(),
 });
 export type NotionCheckpoint = z.infer<typeof NotionCheckpointSchema>;
+
+export const NotionPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: NOTION,
+});
+export type NotionPruneCheckpoint = z.infer<typeof NotionPruneCheckpointSchema>;
 
 // ===== SharePoint Config & Checkpoint =====
 
@@ -213,6 +255,15 @@ export const SharePointCheckpointSchema = z.object({
 });
 export type SharePointCheckpoint = z.infer<typeof SharePointCheckpointSchema>;
 
+export const SharePointPruneCheckpointSchema = BasePruneCheckpointSchema.extend(
+  {
+    type: SHAREPOINT,
+  },
+);
+export type SharePointPruneCheckpoint = z.infer<
+  typeof SharePointPruneCheckpointSchema
+>;
+
 // ===== Google Drive Config & Checkpoint =====
 
 export const GoogleDriveConfigSchema = z.object({
@@ -233,6 +284,14 @@ export const GoogleDriveCheckpointSchema = z.object({
 });
 export type GoogleDriveCheckpoint = z.infer<typeof GoogleDriveCheckpointSchema>;
 
+export const GoogleDrivePruneCheckpointSchema =
+  BasePruneCheckpointSchema.extend({
+    type: GDRIVE,
+  });
+export type GoogleDrivePruneCheckpoint = z.infer<
+  typeof GoogleDrivePruneCheckpointSchema
+>;
+
 // ===== Asana Config & Checkpoint =====
 
 export const AsanaConfigSchema = z.object({
@@ -248,6 +307,11 @@ export const AsanaCheckpointSchema = z.object({
   lastSyncedAt: z.string().optional(),
 });
 export type AsanaCheckpoint = z.infer<typeof AsanaCheckpointSchema>;
+
+export const AsanaPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: ASANA,
+});
+export type AsanaPruneCheckpoint = z.infer<typeof AsanaPruneCheckpointSchema>;
 
 // ===== Linear Config & Checkpoint =====
 
@@ -285,6 +349,11 @@ export const LinearCheckpointSchema = z.object({
   cycleUpdatedAfter: z.string().optional(),
 });
 export type LinearCheckpoint = z.infer<typeof LinearCheckpointSchema>;
+
+export const LinearPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: LINEAR,
+});
+export type LinearPruneCheckpoint = z.infer<typeof LinearPruneCheckpointSchema>;
 
 // ===== Salesforce Config & Checkpoint =====
 
@@ -326,6 +395,15 @@ export const SalesforceCheckpointSchema = z.object({
 });
 export type SalesforceCheckpoint = z.infer<typeof SalesforceCheckpointSchema>;
 
+export const SalesforcePruneCheckpointSchema = BasePruneCheckpointSchema.extend(
+  {
+    type: SALESFORCE,
+  },
+);
+export type SalesforcePruneCheckpoint = z.infer<
+  typeof SalesforcePruneCheckpointSchema
+>;
+
 // ===== Discriminated Unions =====
 
 // ===== Dropbox Config & Checkpoint =====
@@ -347,6 +425,14 @@ export const DropboxCheckpointSchema = z.object({
 });
 export type DropboxCheckpoint = z.infer<typeof DropboxCheckpointSchema>;
 
+export const DropboxPruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: DROPBOX,
+  cursor: z.string().optional(),
+});
+export type DropboxPruneCheckpoint = z.infer<
+  typeof DropboxPruneCheckpointSchema
+>;
+
 // ===== Outline Config & Checkpoint =====
 
 export const OutlineConfigSchema = z.object({
@@ -365,6 +451,13 @@ export const OutlineCheckpointSchema = z.object({
   lastSyncedAt: z.string().optional(),
 });
 export type OutlineCheckpoint = z.infer<typeof OutlineCheckpointSchema>;
+
+export const OutlinePruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: OUTLINE,
+});
+export type OutlinePruneCheckpoint = z.infer<
+  typeof OutlinePruneCheckpointSchema
+>;
 
 export const ConnectorConfigSchema = z.discriminatedUnion("type", [
   JiraConfigSchema,
@@ -399,6 +492,25 @@ export const ConnectorCheckpointSchema = z.discriminatedUnion("type", [
   SalesforceCheckpointSchema,
 ]);
 export type ConnectorCheckpoint = z.infer<typeof ConnectorCheckpointSchema>;
+
+export const ConnectorPruneCheckpointSchema = z.discriminatedUnion("type", [
+  JiraPruneCheckpointSchema,
+  ConfluencePruneCheckpointSchema,
+  GithubPruneCheckpointSchema,
+  GitlabPruneCheckpointSchema,
+  ServiceNowPruneCheckpointSchema,
+  NotionPruneCheckpointSchema,
+  SharePointPruneCheckpointSchema,
+  GoogleDrivePruneCheckpointSchema,
+  DropboxPruneCheckpointSchema,
+  AsanaPruneCheckpointSchema,
+  LinearPruneCheckpointSchema,
+  OutlinePruneCheckpointSchema,
+  SalesforcePruneCheckpointSchema,
+]);
+export type ConnectorPruneCheckpoint = z.infer<
+  typeof ConnectorPruneCheckpointSchema
+>;
 
 // ===== Sync Types =====
 
@@ -438,6 +550,12 @@ export interface ConnectorSyncBatch {
   documents: ConnectorDocument[];
   failures?: ConnectorItemFailure[];
   checkpoint: ConnectorCheckpoint;
+  hasMore: boolean;
+}
+
+export interface ConnectorPruneBatch {
+  sourceIds: string[];
+  checkpoint: ConnectorPruneCheckpoint;
   hasMore: boolean;
 }
 
@@ -492,10 +610,6 @@ export interface Connector {
   listAllSourceIds?(params: {
     config: Record<string, unknown>;
     credentials: ConnectorCredentials;
-    cursor?: string;
-  }): AsyncGenerator<{
-    sourceIds: string[];
-    cursor?: string;
-    hasMore: boolean;
-  }>;
+    checkpoint: Record<string, unknown> | null;
+  }): AsyncGenerator<ConnectorPruneBatch>;
 }

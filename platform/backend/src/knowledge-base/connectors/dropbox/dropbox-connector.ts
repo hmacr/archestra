@@ -3,9 +3,11 @@ import { Dropbox } from "dropbox";
 import type {
   ConnectorCredentials,
   ConnectorDocument,
+  ConnectorPruneBatch,
   ConnectorSyncBatch,
   DropboxCheckpoint,
   DropboxConfig,
+  DropboxPruneCheckpoint,
 } from "@/types";
 import { DropboxConfigSchema } from "@/types";
 import {
@@ -139,18 +141,13 @@ export class DropboxConnector extends BaseConnector {
   async *listAllSourceIds(params: {
     config: Record<string, unknown>;
     credentials: ConnectorCredentials;
-    cursor?: string;
-  }): AsyncGenerator<{
-    sourceIds: string[];
-    cursor?: string;
-    hasMore: boolean;
-  }> {
+    checkpoint: Record<string, unknown> | null;
+  }): AsyncGenerator<ConnectorPruneBatch> {
     const parsed = parseDropboxConfig(params.config);
     if (!parsed) {
       throw new Error("Invalid Dropbox configuration");
     }
 
-    const batchSize = parsed.batchSize ?? DEFAULT_BATCH_SIZE;
     const rootPath = parsed.rootPath
       ? parsed.rootPath.startsWith("/")
         ? parsed.rootPath
@@ -160,7 +157,7 @@ export class DropboxConnector extends BaseConnector {
 
     const dbx = getDropboxClient(params.credentials);
 
-    let cursor = params.cursor;
+    const checkpoint = params.checkpoint as DropboxPruneCheckpoint | null;
     let hasMore = true;
 
     while (hasMore) {
@@ -170,7 +167,7 @@ export class DropboxConnector extends BaseConnector {
       let nextCursor: string;
       let more: boolean;
 
-      if (cursor) {
+      if (checkpoint?.cursor) {
         const result = await dbx.filesListFolderContinue({ cursor });
         entries = result.result.entries;
         nextCursor = result.result.cursor;
@@ -194,19 +191,22 @@ export class DropboxConnector extends BaseConnector {
       const sourceIds = files.map((f) => f.id);
 
       if (sourceIds.length === 0 && !more) {
-        yield { sourceIds: [], cursor: undefined, hasMore: false };
+        yield {
+          sourceIds: [],
+          checkpoint: { type: "dropbox", cursor: undefined },
+          hasMore: false,
+        };
         break;
       }
 
-      for (let i = 0; i < sourceIds.length; i += batchSize) {
-        const batchIds = sourceIds.slice(i, i + batchSize);
-        const isLastChunk = i + batchSize >= sourceIds.length;
-        yield {
-          sourceIds: batchIds,
-          cursor: nextCursor,
-          hasMore: more || !isLastChunk,
-        };
-      }
+      yield {
+        sourceIds,
+        checkpoint: {
+          type: "dropbox",
+          cursor,
+        },
+        hasMore: more,
+      };
     }
   }
 

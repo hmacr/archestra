@@ -157,6 +157,7 @@ describe("ConnectorPruneService", () => {
       status: "partial",
       startedAt: new Date(Date.now() - 10_000),
       checkpoint: {
+        type: "jira",
         cursor: "page-2",
         seenIds: ["alive1"],
       },
