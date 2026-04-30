@@ -160,3 +160,11 @@ To unblock real contributors without re-opening the floodgates, sign in via GitH
 - @piercypixel
 - @suleman1412
 - @DanProgrammer1999
+- @shahwali-dev
+- @TheJustinGreen
+- @apoorva-01
+- @dscode-dev
+- @jovanaradovanovic
+- @sergey-zakharov
+- @andreahlert
+- @ilmpc

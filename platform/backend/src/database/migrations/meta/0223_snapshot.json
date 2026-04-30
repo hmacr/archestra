@@ -1,5 +1,5 @@
 {
-  "id": "282219b2-6ea6-4b5f-b185-99674aa87d5e",
+  "id": "d94c9a82-6822-4182-b2b5-f6c9c2c7a18c",
   "prevId": "3962e239-e49a-4648-bd19-17f62c295695",
   "version": "7",
   "dialect": "postgresql",
@@ -1676,13 +1676,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "type": {
-          "name": "type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'sync'"
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -1710,13 +1703,6 @@
         },
         "documents_ingested": {
           "name": "documents_ingested",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "documents_pruned": {
-          "name": "documents_pruned",
           "type": "integer",
           "primaryKey": false,
           "notNull": false,
@@ -3619,24 +3605,6 @@
         },
         "last_sync_error": {
           "name": "last_sync_error",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_prune_at": {
-          "name": "last_prune_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_prune_status": {
-          "name": "last_prune_status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_prune_error": {
-          "name": "last_prune_error",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -6567,6 +6535,12 @@
         "connection_shown_providers": {
           "name": "connection_shown_providers",
           "type": "text[]",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "connection_base_urls": {
+          "name": "connection_base_urls",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         }
