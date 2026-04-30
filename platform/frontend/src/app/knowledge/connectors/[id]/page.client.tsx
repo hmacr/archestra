@@ -54,6 +54,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -109,15 +110,28 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isForceResyncOpen, setIsForceResyncOpen] = useState(false);
 
-  const [pageIndex, setPageIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<"sync" | "prune">("sync");
+  const [syncPageIndex, setSyncPageIndex] = useState(0);
+  const [prunePageIndex, setPrunePageIndex] = useState(0);
   const pageSize = 10;
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
 
-  const { data: runsData, isPending: isRunsPending } = useConnectorRuns({
-    connectorId,
-    limit: pageSize,
-    offset: pageIndex * pageSize,
-  });
+  const { data: syncRunsData, isPending: isSyncRunsPending } = useConnectorRuns(
+    {
+      connectorId,
+      type: "sync",
+      limit: pageSize,
+      offset: syncPageIndex * pageSize,
+    },
+  );
+
+  const { data: pruneRunsData, isPending: isPruneRunsPending } =
+    useConnectorRuns({
+      connectorId,
+      type: "prune",
+      limit: pageSize,
+      offset: prunePageIndex * pageSize,
+    });
 
   const handleSync = useCallback(async () => {
     await syncConnector.mutateAsync(connectorId);
@@ -127,14 +141,21 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
     await testConnection.mutateAsync(connectorId);
   }, [testConnection, connectorId]);
 
-  const handlePaginationChange = useCallback(
+  const handleSyncPaginationChange = useCallback(
     (newPagination: { pageIndex: number; pageSize: number }) => {
-      setPageIndex(newPagination.pageIndex);
+      setSyncPageIndex(newPagination.pageIndex);
     },
     [],
   );
 
-  const columns: ColumnDef<ConnectorRunItem>[] = [
+  const handlePrunePaginationChange = useCallback(
+    (newPagination: { pageIndex: number; pageSize: number }) => {
+      setPrunePageIndex(newPagination.pageIndex);
+    },
+    [],
+  );
+
+  const baseColumns: ColumnDef<ConnectorRunItem>[] = [
     {
       id: "status",
       accessorKey: "status",
@@ -165,30 +186,6 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
       ),
     },
     {
-      id: "documentsProcessed",
-      header: "Processed",
-      cell: ({ row }) => {
-        const processed = row.original.documentsProcessed ?? 0;
-        // totalItems will be available after codegen
-        const total = (row.original as Record<string, unknown>).totalItems as
-          | number
-          | null;
-        return (
-          <div>
-            {processed}
-            {total != null && total > 0 && (
-              <span className="text-muted-foreground"> / {total}</span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      id: "documentsIngested",
-      header: "Ingested",
-      cell: ({ row }) => <div>{row.original.documentsIngested ?? 0}</div>,
-    },
-    {
       id: "logs",
       header: "Logs",
       cell: ({ row }) => {
@@ -210,6 +207,42 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
         );
       },
     },
+  ];
+
+  const syncColumns: ColumnDef<ConnectorRunItem>[] = [
+    ...baseColumns.slice(0, 3),
+    {
+      id: "documentsProcessed",
+      header: "Processed",
+      cell: ({ row }) => {
+        const processed = row.original.documentsProcessed ?? 0;
+        const total = row.original.totalItems;
+        return (
+          <div>
+            {processed}
+            {total != null && total > 0 && (
+              <span className="text-muted-foreground"> / {total}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "documentsIngested",
+      header: "Ingested",
+      cell: ({ row }) => <div>{row.original.documentsIngested ?? 0}</div>,
+    },
+    baseColumns[3],
+  ];
+
+  const pruneColumns: ColumnDef<ConnectorRunItem>[] = [
+    ...baseColumns.slice(0, 3),
+    {
+      id: "documentsPruned",
+      header: "Pruned",
+      cell: ({ row }) => <div>{row.original.documentsPruned ?? 0}</div>,
+    },
+    baseColumns[3],
   ];
 
   if (isPending) {
@@ -371,31 +404,64 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
           </div>
         </div>
 
-        <h2 className="text-lg font-semibold">Sync Runs</h2>
-
-        <LoadingWrapper
-          isPending={isRunsPending}
-          loadingFallback={<LoadingSpinner />}
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as "sync" | "prune")}
         >
-          {(runsData?.data ?? []).length === 0 ? (
-            <div className="text-muted-foreground">
-              No sync runs yet. Trigger a manual sync or wait for the scheduled
-              sync.
-            </div>
-          ) : (
-            <DataTable
-              columns={columns}
-              data={runsData?.data ?? []}
-              manualPagination={true}
-              pagination={{
-                pageIndex,
-                pageSize,
-                total: runsData?.pagination?.total ?? 0,
-              }}
-              onPaginationChange={handlePaginationChange}
-            />
-          )}
-        </LoadingWrapper>
+          <TabsList>
+            <TabsTrigger value="sync">Sync</TabsTrigger>
+            <TabsTrigger value="prune">Prune</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="sync" className="mt-4">
+            <LoadingWrapper
+              isPending={isSyncRunsPending}
+              loadingFallback={<LoadingSpinner />}
+            >
+              {(syncRunsData?.data ?? []).length === 0 ? (
+                <div className="text-muted-foreground">
+                  No sync runs yet. Trigger a manual sync or wait for the
+                  scheduled sync.
+                </div>
+              ) : (
+                <DataTable
+                  columns={syncColumns}
+                  data={syncRunsData?.data ?? []}
+                  manualPagination={true}
+                  pagination={{
+                    pageIndex: syncPageIndex,
+                    pageSize,
+                    total: syncRunsData?.pagination?.total ?? 0,
+                  }}
+                  onPaginationChange={handleSyncPaginationChange}
+                />
+              )}
+            </LoadingWrapper>
+          </TabsContent>
+
+          <TabsContent value="prune" className="mt-4">
+            <LoadingWrapper
+              isPending={isPruneRunsPending}
+              loadingFallback={<LoadingSpinner />}
+            >
+              {(pruneRunsData?.data ?? []).length === 0 ? (
+                <div className="text-muted-foreground">No prune runs yet.</div>
+              ) : (
+                <DataTable
+                  columns={pruneColumns}
+                  data={pruneRunsData?.data ?? []}
+                  manualPagination={true}
+                  pagination={{
+                    pageIndex: prunePageIndex,
+                    pageSize,
+                    total: pruneRunsData?.pagination?.total ?? 0,
+                  }}
+                  onPaginationChange={handlePrunePaginationChange}
+                />
+              )}
+            </LoadingWrapper>
+          </TabsContent>
+        </Tabs>
 
         <ConnectorRunDetailsDialog
           connectorId={connectorId}

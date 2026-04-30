@@ -14,10 +14,15 @@ class ConnectorRunModel {
   /** List runs without the `logs` column (for list endpoints). */
   static async findByConnectorList(params: {
     connectorId: string;
+    type?: ConnectorRunType;
     limit?: number;
     offset?: number;
   }): Promise<ConnectorRunListItem[]> {
     const t = schema.connectorRunsTable;
+    const conditions = [eq(t.connectorId, params.connectorId)];
+    if (params.type !== undefined) {
+      conditions.push(eq(t.type, params.type));
+    }
     let query = db
       .select({
         id: t.id,
@@ -38,7 +43,7 @@ class ConnectorRunModel {
         createdAt: t.createdAt,
       })
       .from(t)
-      .where(eq(t.connectorId, params.connectorId))
+      .where(and(...conditions))
       .orderBy(desc(t.startedAt))
       .$dynamic();
 
@@ -74,11 +79,18 @@ class ConnectorRunModel {
     return await query;
   }
 
-  static async countByConnector(connectorId: string): Promise<number> {
+  static async countByConnector(
+    connectorId: string,
+    type?: ConnectorRunType,
+  ): Promise<number> {
+    const conditions = [eq(schema.connectorRunsTable.connectorId, connectorId)];
+    if (type !== undefined) {
+      conditions.push(eq(schema.connectorRunsTable.type, type));
+    }
     const [result] = await db
       .select({ count: count() })
       .from(schema.connectorRunsTable)
-      .where(eq(schema.connectorRunsTable.connectorId, connectorId));
+      .where(and(...conditions));
 
     return result?.count ?? 0;
   }

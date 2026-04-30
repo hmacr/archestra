@@ -267,17 +267,18 @@ export function useTestConnectorConnection() {
 
 export function useConnectorRuns(params: {
   connectorId: string;
+  type?: "sync" | "prune";
   limit?: number;
   offset?: number;
 }) {
   const queryClient = useQueryClient();
-  const { connectorId, limit = 10, offset = 0 } = params;
+  const { connectorId, type, limit = 10, offset = 0 } = params;
   return useQuery({
-    queryKey: ["connectors", connectorId, "runs", { limit, offset }],
+    queryKey: ["connectors", connectorId, "runs", { type, limit, offset }],
     queryFn: async () => {
       const { data, error } = await getConnectorRuns({
         path: { id: connectorId },
-        query: { limit, offset },
+        query: { limit, offset, type },
       });
       if (error) {
         handleApiError(error);

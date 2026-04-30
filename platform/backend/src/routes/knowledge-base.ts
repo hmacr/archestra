@@ -959,14 +959,16 @@ const knowledgeBaseRoutes: FastifyPluginAsyncZod = async (fastify) => {
         description: "List connector runs",
         tags: ["Connectors"],
         params: z.object({ id: z.string() }),
-        querystring: PaginationQuerySchema,
+        querystring: PaginationQuerySchema.extend({
+          type: z.enum(["sync", "prune"]).optional(),
+        }),
         response: constructResponseSchema(
           createPaginatedResponseSchema(SelectConnectorRunListSchema),
         ),
       },
     },
     async (
-      { params: { id }, query: { limit, offset }, organizationId, user },
+      { params: { id }, query: { limit, offset, type }, organizationId, user },
       reply,
     ) => {
       await findConnectorOrThrow({
@@ -978,10 +980,11 @@ const knowledgeBaseRoutes: FastifyPluginAsyncZod = async (fastify) => {
       const [data, total] = await Promise.all([
         ConnectorRunModel.findByConnectorList({
           connectorId: id,
+          type,
           limit,
           offset,
         }),
-        ConnectorRunModel.countByConnector(id),
+        ConnectorRunModel.countByConnector(id, type),
       ]);
 
       const currentPage = Math.floor(offset / limit) + 1;
