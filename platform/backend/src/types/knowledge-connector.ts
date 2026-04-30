@@ -605,7 +605,7 @@ export interface Connector {
 
   /**
    * Enumerate all source IDs from the external system for orphan detection.
-   * Override in concrete connectors to enable orphan pruning.
+   * Override in concrete connectors to enable pruning.
    */
   listAllSourceIds?(params: {
     config: Record<string, unknown>;

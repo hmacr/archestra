@@ -1,5 +1,6 @@
 import { Cron } from "croner";
 import config from "@/config";
+import { isPruneSupported } from "@/knowledge-base/connectors/registry";
 import logger from "@/logging";
 import {
   ConnectorRunModel,
@@ -61,6 +62,10 @@ export async function handleCheckDueConnectors(): Promise<void> {
 async function schedulePruneTask(
   connector: KnowledgeBaseConnector,
 ): Promise<boolean> {
+  if (!isPruneSupported(connector.connectorType)) {
+    return false;
+  }
+
   try {
     const lastPruneAt = connector.lastPruneAt ?? new Date(0);
     const pruneIntervalMs = config.kb.connectorPruneIntervalSeconds * 1000;

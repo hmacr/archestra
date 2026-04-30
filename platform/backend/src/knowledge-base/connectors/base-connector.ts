@@ -87,7 +87,7 @@ export abstract class BaseConnector implements Connector {
     cursor?: string;
   }): AsyncGenerator<ConnectorPruneBatch> {
     // No-op by default.
-    // Override in a concrete connector to enable orphan pruning.
+    // Override in a concrete connector to enable pruning.
   }
 
   protected buildBasicAuthHeader(email: string, apiToken: string): string {

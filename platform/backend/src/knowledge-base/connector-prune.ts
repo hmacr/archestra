@@ -147,7 +147,7 @@ class ConnectorPruneService {
         });
         runLog.info(
           { pruned: documentsPruned, sourceCount: sourceIds.length },
-          "Orphan prune completed",
+          "Prune completed",
         );
       }
 

@@ -29,10 +29,31 @@ const connectorRegistry: Record<ConnectorType, () => Connector> = {
   salesforce: () => new SalesforceConnector(),
 };
 
+// Temporary mapper until all connectors support pruning.
+const pruneSupported: Record<ConnectorType, boolean> = {
+  jira: false,
+  confluence: false,
+  github: false,
+  gitlab: false,
+  servicenow: false,
+  notion: false,
+  sharepoint: false,
+  gdrive: false,
+  dropbox: true,
+  outline: false,
+  asana: false,
+  linear: false,
+  salesforce: false,
+};
+
 export function getConnector(type: string): Connector {
   const factory = connectorRegistry[type as ConnectorType];
   if (!factory) {
     throw new Error(`Unknown connector type: ${type}`);
   }
   return factory();
+}
+
+export function isPruneSupported(type: string): boolean {
+  return pruneSupported[type as ConnectorType] ?? false;
 }
