@@ -828,6 +828,9 @@ const config = {
     connectorSyncMaxDurationSeconds: parseConnectorSyncMaxDuration(
       process.env.ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_SYNC_MAX_DURATION_SECONDS,
     ),
+    connectorPruneIntervalSeconds: parseConnectorPruneInterval(
+      process.env.ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS,
+    ),
     taskWorkerPollIntervalSeconds: Number.parseInt(
       process.env.ARCHESTRA_KNOWLEDGE_BASE_TASK_WORKER_POLL_INTERVAL_SECONDS ||
         "5",
@@ -873,6 +876,22 @@ export function parseConnectorSyncMaxDuration(
   const DEFAULT = 3300; // 55 minutes
   const seconds = Number.parseInt(value || String(DEFAULT), 10);
   if (Number.isNaN(seconds) || seconds <= 0) return undefined;
+  return seconds;
+}
+
+/** @public — exported for testability */
+export function parseConnectorPruneInterval(
+  value: string | undefined,
+): number {
+  const DEFAULT = 86400; // 24 hours in seconds
+  if (!value) return DEFAULT;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isNaN(seconds) || seconds <= 0) {
+    logger.warn(
+      `Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "${value}", using default ${DEFAULT}`,
+    );
+    return DEFAULT;
+  }
   return seconds;
 }
 

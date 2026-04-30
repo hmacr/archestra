@@ -7,8 +7,7 @@ import {
 } from "@/models";
 import { taskQueueService } from "@/task-queue";
 import type { KnowledgeBaseConnector } from "@/types";
-
-const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+import config from "@/config";
 
 export async function handleCheckDueConnectors(): Promise<void> {
   const connectors = await KnowledgeBaseConnectorModel.findAllEnabled();
@@ -64,7 +63,8 @@ async function schedulePruneTask(
 ): Promise<boolean> {
   try {
     const lastPruneAt = connector.lastPruneAt ?? new Date(0);
-    if (Date.now() - lastPruneAt.getTime() >= PRUNE_INTERVAL_MS) {
+    const pruneIntervalMs = config.kb.connectorPruneIntervalSeconds * 1000;
+    if (Date.now() - lastPruneAt.getTime() >= pruneIntervalMs) {
       const exists = await TaskModel.hasPendingOrProcessing(
         ["connector_sync", "connector_prune"],
         connector.id,

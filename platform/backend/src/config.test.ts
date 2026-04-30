@@ -17,6 +17,7 @@ import {
   getTrustedOrigins,
   parseBodyLimit,
   parseCommaSeparatedList,
+  parseConnectorPruneInterval,
   parseConnectorSyncMaxDuration,
   parseContentMaxLength,
   parseProcessType,
@@ -935,6 +936,53 @@ describe("parseConnectorSyncMaxDuration", () => {
 
   test("should parse large value", () => {
     expect(parseConnectorSyncMaxDuration("7200")).toBe(7200);
+  });
+});
+
+describe("parseConnectorPruneInterval", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("should return default 86400 when undefined", () => {
+    expect(parseConnectorPruneInterval(undefined)).toBe(86400);
+  });
+
+  test("should return default 86400 when empty string", () => {
+    expect(parseConnectorPruneInterval("")).toBe(86400);
+  });
+
+  test("should parse valid positive integer", () => {
+    expect(parseConnectorPruneInterval("43200")).toBe(43200);
+  });
+
+  test("should return default and warn for zero", () => {
+    expect(parseConnectorPruneInterval("0")).toBe(86400);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "0", using default 86400',
+    );
+  });
+
+  test("should return default and warn for negative value", () => {
+    expect(parseConnectorPruneInterval("-100")).toBe(86400);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "-100", using default 86400',
+    );
+  });
+
+  test("should return default and warn for non-numeric value", () => {
+    expect(parseConnectorPruneInterval("abc")).toBe(86400);
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "abc", using default 86400',
+    );
+  });
+
+  test("should parse large value", () => {
+    expect(parseConnectorPruneInterval("172800")).toBe(172800);
+  });
+
+  test("should trim whitespace and parse value", () => {
+    expect(parseConnectorPruneInterval("  43200  ")).toBe(43200);
   });
 });
 
