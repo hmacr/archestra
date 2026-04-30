@@ -880,9 +880,7 @@ export function parseConnectorSyncMaxDuration(
 }
 
 /** @public — exported for testability */
-export function parseConnectorPruneInterval(
-  value: string | undefined,
-): number {
+export function parseConnectorPruneInterval(value: string | undefined): number {
   const DEFAULT = 86400; // 24 hours in seconds
   if (!value) return DEFAULT;
   const seconds = Number.parseInt(value, 10);

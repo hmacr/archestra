@@ -1,4 +1,5 @@
 import { Cron } from "croner";
+import config from "@/config";
 import logger from "@/logging";
 import {
   ConnectorRunModel,
@@ -7,7 +8,6 @@ import {
 } from "@/models";
 import { taskQueueService } from "@/task-queue";
 import type { KnowledgeBaseConnector } from "@/types";
-import config from "@/config";
 
 export async function handleCheckDueConnectors(): Promise<void> {
   const connectors = await KnowledgeBaseConnectorModel.findAllEnabled();
