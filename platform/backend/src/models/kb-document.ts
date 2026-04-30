@@ -198,21 +198,6 @@ class KbDocumentModel {
     return typeof count === "number" ? count : Number(count ?? 0);
   }
 
-  static async deleteCreatedBefore(params: {
-    connectorId: string;
-    before: Date;
-  }): Promise<number> {
-    const result = await db
-      .delete(schema.kbDocumentsTable)
-      .where(
-        and(
-          eq(schema.kbDocumentsTable.connectorId, params.connectorId),
-          lt(schema.kbDocumentsTable.createdAt, params.before),
-        ),
-      );
-    return result.rowCount ?? 0;
-  }
-
   static async deleteOrphaned(params: {
     connectorId: string;
     seenSourceIds: string[];

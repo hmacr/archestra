@@ -75,6 +75,7 @@ class ConnectorSyncService {
     // Create a connector run record
     const run = await ConnectorRunModel.create({
       connectorId,
+      type: "sync",
       status: "running",
       startedAt: new Date(),
       documentsProcessed: 0,

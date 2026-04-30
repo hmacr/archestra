@@ -57,8 +57,8 @@ class ConnectorPruneService {
 
     if (partialRun) {
       await Promise.all([
-        await ConnectorRunModel.update(partialRun.id, { status: "running" }),
-        await KnowledgeBaseConnectorModel.update(connectorId, {
+        ConnectorRunModel.update(partialRun.id, { status: "running" }),
+        KnowledgeBaseConnectorModel.update(connectorId, {
           lastPruneStatus: "running",
           lastPruneError: null,
         }),
@@ -77,13 +77,15 @@ class ConnectorPruneService {
       );
     } else {
       [run] = await Promise.all([
-        await ConnectorRunModel.create({
+        ConnectorRunModel.create({
           connectorId,
           type: "prune",
           status: "running",
           startedAt: new Date(),
+          documentsProcessed: 0,
+          documentsPruned: 0,
         }),
-        await KnowledgeBaseConnectorModel.update(connectorId, {
+        KnowledgeBaseConnectorModel.update(connectorId, {
           lastPruneStatus: "running",
           lastPruneError: null,
         }),
@@ -105,7 +107,6 @@ class ConnectorPruneService {
 
     const createdBefore = run.startedAt;
     const startTime = Date.now();
-    let documentsPruned = run.documentsPruned ?? 0;
 
     try {
       const generator = connectorImpl.listAllSourceIds?.({
@@ -130,7 +131,6 @@ class ConnectorPruneService {
             await ConnectorRunModel.update(run.id, {
               status: "partial",
               completedAt: new Date(),
-              documentsPruned,
               logs: options.getLogOutput?.() ?? null,
             });
             await KnowledgeBaseConnectorModel.update(connectorId, {
@@ -148,16 +148,17 @@ class ConnectorPruneService {
         cursor = batch.cursor;
       }
 
+      let documentsPruned = 0;
+
       // Full enumeration complete — safe to delete orphans
       if (seenIds.length > 0) {
-        const pruned = await KbDocumentModel.deleteOrphaned({
+        documentsPruned = await KbDocumentModel.deleteOrphaned({
           connectorId,
           seenSourceIds: seenIds,
           createdBefore,
         });
-        documentsPruned += pruned;
         runLog.info(
-          { pruned, seenCount: seenIds.length },
+          { pruned: documentsPruned, seenCount: seenIds.length },
           "Orphan prune completed",
         );
       }

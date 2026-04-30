@@ -89,7 +89,7 @@ export abstract class BaseConnector implements Connector {
     cursor?: string;
     hasMore: boolean;
   }> {
-    // No-op default: orphan pruning not supported by this connector.
+    // No-op by default.
     // Override in a concrete connector to enable orphan pruning.
   }
 
