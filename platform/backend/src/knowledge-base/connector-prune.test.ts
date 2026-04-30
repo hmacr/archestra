@@ -70,7 +70,7 @@ function makeNoOpConnector() {
 }
 
 function makeConnectorWithSourceIds(
-  batches: Array<{ sourceIds: string[]; cursor?: string; hasMore: boolean }>,
+  batches: Array<{ sourceIds: string[]; hasMore: boolean }>,
 ) {
   return {
     estimateTotalItems: vi.fn().mockResolvedValue(null),
@@ -78,7 +78,11 @@ function makeConnectorWithSourceIds(
     listAllSourceIds: vi.fn().mockImplementation(() =>
       (async function* () {
         for (const batch of batches) {
-          yield batch;
+          yield {
+            sourceIds: batch.sourceIds,
+            checkpoint: { type: "dropbox" as const },
+            hasMore: batch.hasMore,
+          };
         }
       })(),
     ),
@@ -107,7 +111,7 @@ describe("ConnectorPruneService", () => {
 
     setupSecret();
     const mockImpl = makeConnectorWithSourceIds([
-      { sourceIds: ["alive"], cursor: undefined, hasMore: false },
+      { sourceIds: ["alive"], hasMore: false },
     ]);
     mockGetConnector.mockReturnValue(mockImpl);
 
@@ -146,7 +150,7 @@ describe("ConnectorPruneService", () => {
     setupSecret();
     // Connector will yield "alive2" on resume
     const mockImpl = makeConnectorWithSourceIds([
-      { sourceIds: ["alive2"], cursor: undefined, hasMore: false },
+      { sourceIds: ["alive2"], hasMore: false },
     ]);
     mockGetConnector.mockReturnValue(mockImpl);
 
@@ -158,8 +162,7 @@ describe("ConnectorPruneService", () => {
       startedAt: new Date(Date.now() - 10_000),
       checkpoint: {
         type: "jira",
-        cursor: "page-2",
-        seenIds: ["alive1"],
+        sourceIds: ["alive1"],
       },
     });
 
@@ -203,10 +206,22 @@ describe("ConnectorPruneService", () => {
     await KnowledgeBaseConnectorModel.update(connector.id, { secretId });
 
     setupSecret();
-    const mockImpl = makeConnectorWithSourceIds([
-      { sourceIds: ["id-1"], cursor: "cursor-2", hasMore: true },
-    ]);
-    mockGetConnector.mockReturnValue(mockImpl);
+    const infiniteMock = {
+      estimateTotalItems: vi.fn().mockResolvedValue(null),
+      sync: vi.fn().mockImplementation(() => (async function* () {})()),
+      listAllSourceIds: vi.fn().mockImplementation(() =>
+        (async function* () {
+          while (true) {
+            yield {
+              sourceIds: ["id-1"],
+              checkpoint: { type: "dropbox" as const },
+              hasMore: true,
+            };
+          }
+        })(),
+      ),
+    };
+    mockGetConnector.mockReturnValue(infiniteMock);
 
     const result = await connectorPruneService.executePrune(connector.id, {
       maxDurationMs: 1, // Very short so it times out immediately
@@ -282,7 +297,7 @@ describe("ConnectorPruneService", () => {
 
     setupSecret();
     const mockImpl = makeConnectorWithSourceIds([
-      { sourceIds: [], cursor: undefined, hasMore: false },
+      { sourceIds: [], hasMore: false },
     ]);
     mockGetConnector.mockReturnValue(mockImpl);
 

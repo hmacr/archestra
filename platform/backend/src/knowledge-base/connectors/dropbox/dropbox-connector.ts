@@ -158,6 +158,7 @@ export class DropboxConnector extends BaseConnector {
     const dbx = getDropboxClient(params.credentials);
 
     const checkpoint = params.checkpoint as DropboxPruneCheckpoint | null;
+    let cursor = checkpoint?.cursor;
     let hasMore = true;
 
     while (hasMore) {
@@ -167,7 +168,7 @@ export class DropboxConnector extends BaseConnector {
       let nextCursor: string;
       let more: boolean;
 
-      if (checkpoint?.cursor) {
+      if (cursor) {
         const result = await dbx.filesListFolderContinue({ cursor });
         entries = result.result.entries;
         nextCursor = result.result.cursor;
