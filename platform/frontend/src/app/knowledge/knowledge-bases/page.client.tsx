@@ -190,6 +190,7 @@ function KnowledgeBasesList() {
               objectNamePlural="knowledge bases"
               searchFields={["name", "description"]}
               paramName="search"
+              className="relative w-[370px]"
             />
           </div>
         </div>
@@ -568,6 +569,7 @@ function AddConnectorDialog({
               onSearchChange={setSearch}
               syncQueryParams={false}
               debounceMs={300}
+              className="relative w-[370px]"
               inputClassName="w-full bg-background/50 backdrop-blur-sm border-border/50 focus:border-primary/50 transition-colors pl-9"
             />
             <div className="grid max-h-[50vh] grid-cols-2 gap-3 overflow-y-auto pt-4">

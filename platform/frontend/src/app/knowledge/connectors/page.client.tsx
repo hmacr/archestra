@@ -231,6 +231,7 @@ function ConnectorsList() {
               objectNamePlural="connectors"
               searchFields={["name", "description"]}
               paramName="search"
+              className="relative w-[330px]"
             />
             <Select
               value={connectorTypeFilter}
