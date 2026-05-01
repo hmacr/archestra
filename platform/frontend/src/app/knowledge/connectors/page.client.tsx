@@ -1,6 +1,6 @@
 "use client";
 
-import type { archestraApiTypes } from "@shared";
+import { type archestraApiTypes, CONNECTOR_TYPE_LABELS } from "@shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNow } from "date-fns";
 import { Database, Pencil, Trash2, Users } from "lucide-react";
@@ -44,14 +44,6 @@ const AGENT_TYPE_LABELS: Record<string, string> = {
   agent: "Agent",
   mcp_gateway: "MCP Gateway",
 };
-
-const CONNECTOR_TYPE_OPTIONS = [
-  "jira",
-  "confluence",
-  "github",
-  "gitlab",
-  "servicenow",
-] as const;
 
 function formatAgentType(agentType: string): string {
   return AGENT_TYPE_LABELS[agentType] ?? agentType;
@@ -249,7 +241,7 @@ function ConnectorsList() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All connector types</SelectItem>
-                {CONNECTOR_TYPE_OPTIONS.map((type) => (
+                {Object.keys(CONNECTOR_TYPE_LABELS).map((type) => (
                   <SelectItem key={type} value={type}>
                     <div className="flex items-center gap-2 capitalize">
                       <ConnectorTypeIcon type={type} className="h-4 w-4" />
