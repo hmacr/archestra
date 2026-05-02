@@ -187,7 +187,7 @@ function KnowledgeBasesList() {
         <div className="mb-6 flex flex-col gap-2">
           <div className="flex items-center gap-4">
             <SearchInput
-              objectNamePlural="knowledge bases"
+              objectNamePlural="Knowledge Bases"
               searchFields={["name", "description"]}
               paramName="search"
               className="relative w-[370px]"
@@ -493,8 +493,8 @@ function AddConnectorDialog({
         }
         description={
           step === "choose"
-            ? "Reuse an existing connector or create a new one."
-            : "Choose connectors to assign to this knowledge base."
+            ? "Reuse an existing Connector or create a new one."
+            : "Choose Connectors to assign to this Knowledge Base."
         }
         size="small"
         footer={
@@ -552,7 +552,7 @@ function AddConnectorDialog({
               <div>
                 <div className="font-medium">Create New</div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Set up a new connector
+                  Set up a new Connector
                 </div>
               </div>
             </button>

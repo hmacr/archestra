@@ -203,7 +203,7 @@ export function CreateConnectorDialog({
                 Add Connector
               </DialogTitle>
               <DialogDescription>
-                Select a connector type to get started.
+                Select a Connector type to get started.
               </DialogDescription>
             </DialogHeader>
             <DialogBody className="pt-4">

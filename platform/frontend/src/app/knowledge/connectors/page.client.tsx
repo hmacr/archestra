@@ -228,7 +228,7 @@ function ConnectorsList() {
         <div className="mb-6 flex flex-col gap-2">
           <div className="flex items-center gap-4">
             <SearchInput
-              objectNamePlural="connectors"
+              objectNamePlural="Connectors"
               searchFields={["name", "description"]}
               paramName="search"
               className="relative w-[330px]"
@@ -241,7 +241,7 @@ function ConnectorsList() {
                 <SelectValue placeholder="Filter by connector type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All connector types</SelectItem>
+                <SelectItem value="all">All Connector types</SelectItem>
                 {Object.keys(CONNECTOR_TYPE_LABELS).map((type) => (
                   <SelectItem key={type} value={type}>
                     <div className="flex items-center gap-2 capitalize">
