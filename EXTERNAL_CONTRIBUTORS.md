@@ -174,3 +174,15 @@ To unblock real contributors without re-opening the floodgates, sign in via GitH
 - @umaiskhan-ops
 - @AvulaNagaSanjay
 - @ritankarsaha
+- @premsreelathasugeendran
+- @rishi-rj-s
+- @Krishna-cell-12
+- @bytepiper
+- @js360000
+- @Aurenv1
+- @mahmoud492
+- @EnTech404
+- @lilit-gevorgyan
+- @akshatd1007
+- @Rahulcse79
+- @Rabbit57
