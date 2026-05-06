@@ -209,8 +209,6 @@ export function CreateConnectorDialog({
             <DialogBody className="pt-4">
               <SearchInput
                 ref={searchRef}
-                objectNamePlural="Connectors"
-                searchFields={["name"]}
                 value={search}
                 onSearchChange={setSearch}
                 syncQueryParams={false}

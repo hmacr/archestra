@@ -228,8 +228,6 @@ function ConnectorsList() {
         <div className="mb-6 flex flex-col gap-2">
           <div className="flex items-center gap-4">
             <SearchInput
-              objectNamePlural="Connectors"
-              searchFields={["name", "description"]}
               paramName="search"
               className="relative w-[330px]"
             />

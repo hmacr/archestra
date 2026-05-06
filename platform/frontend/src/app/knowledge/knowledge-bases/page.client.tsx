@@ -187,8 +187,6 @@ function KnowledgeBasesList() {
         <div className="mb-6 flex flex-col gap-2">
           <div className="flex items-center gap-4">
             <SearchInput
-              objectNamePlural="Knowledge Bases"
-              searchFields={["name", "description"]}
               paramName="search"
               className="relative w-[370px]"
             />
@@ -563,8 +561,6 @@ function AddConnectorDialog({
           <>
             <SearchInput
               ref={searchRef}
-              objectNamePlural="Connectors"
-              searchFields={["name", "description", "type"]}
               value={search}
               onSearchChange={setSearch}
               syncQueryParams={false}
