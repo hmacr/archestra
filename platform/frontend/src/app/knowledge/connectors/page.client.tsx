@@ -1,6 +1,10 @@
 "use client";
 
-import type { archestraApiTypes, ConnectorType } from "@shared";
+import {
+  type archestraApiTypes,
+  CONNECTOR_TYPE_LABELS,
+  type ConnectorType,
+} from "@shared";
 import type { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNow } from "date-fns";
 import { Database, Pencil, Trash2, Users } from "lucide-react";
@@ -271,9 +275,9 @@ function ConnectorsList() {
                 <SelectItem value="all">All connector types</SelectItem>
                 {CONNECTOR_TYPE_OPTIONS.map((type) => (
                   <SelectItem key={type} value={type}>
-                    <div className="flex items-center gap-2 capitalize">
+                    <div className="flex items-center gap-2">
                       <ConnectorTypeIcon type={type} className="h-4 w-4" />
-                      {type}
+                      {CONNECTOR_TYPE_LABELS[type]}
                     </div>
                   </SelectItem>
                 ))}
