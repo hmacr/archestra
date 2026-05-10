@@ -1,4 +1,8 @@
-import type { SupportedEmbeddingDimension, SupportedProvider } from "@shared";
+import {
+  MODELS_DEV_PROVIDER_MAP,
+  type SupportedEmbeddingDimension,
+  type SupportedProvider,
+} from "@shared";
 import {
   type ModelsDevApiResponse,
   modelsDevClient,
@@ -36,9 +40,17 @@ class ModelSyncService {
     provider: SupportedProvider;
     apiKeyValue: string;
     baseUrl?: string | null;
+    extraHeaders?: Record<string, string> | null;
     forceRefresh?: boolean;
   }): Promise<number> {
-    const { apiKeyId, provider, apiKeyValue, baseUrl, forceRefresh } = params;
+    const {
+      apiKeyId,
+      provider,
+      apiKeyValue,
+      baseUrl,
+      extraHeaders,
+      forceRefresh,
+    } = params;
     const fetcher = modelFetchers[provider];
 
     if (!fetcher) {
@@ -51,7 +63,7 @@ class ModelSyncService {
 
     try {
       // 1. Fetch models from provider API
-      const providerModels = await fetcher(apiKeyValue, baseUrl);
+      const providerModels = await fetcher(apiKeyValue, baseUrl, extraHeaders);
 
       if (providerModels.length === 0) {
         logger.info({ provider, apiKeyId }, "No models returned from provider");
@@ -131,6 +143,7 @@ class ModelSyncService {
       provider: SupportedProvider;
       apiKeyValue: string;
       baseUrl?: string | null;
+      extraHeaders?: Record<string, string> | null;
     }>,
     options?: { forceRefresh?: boolean },
   ): Promise<Map<string, number>> {
@@ -143,6 +156,7 @@ class ModelSyncService {
           provider: apiKey.provider,
           apiKeyValue: apiKey.apiKeyValue,
           baseUrl: apiKey.baseUrl,
+          extraHeaders: apiKey.extraHeaders,
           forceRefresh: options?.forceRefresh,
         });
         results.set(apiKey.id, count);
@@ -230,13 +244,20 @@ function inferEmbeddingDimensions(
     // embeddings; admins can opt into 3072 manually in the model editor.
     return 1536;
   }
+  if (
+    provider === "openrouter" &&
+    (id === "openai/text-embedding-3-small" ||
+      id === "openai/text-embedding-3-large")
+  ) {
+    return 1536;
+  }
   if (provider === "gemini" && id === "gemini-embedding-001") {
     return 3072;
   }
   if (provider === "gemini" && id === "gemini-embedding-2-preview") {
     return 3072;
   }
-  if (id === "nomic-embed-text") {
+  if (id === "nomic-embed-text" || id.endsWith("/nomic-embed-text")) {
     return 768;
   }
   return null;
@@ -273,30 +294,6 @@ export function resolveModelCapabilities(params: {
     },
   });
 }
-
-/**
- * Maps models.dev provider IDs to Archestra provider names.
- */
-const MODELS_DEV_PROVIDER_MAP: Record<string, SupportedProvider | null> = {
-  openai: "openai",
-  openrouter: "openrouter",
-  anthropic: "anthropic",
-  google: "gemini",
-  "google-vertex": "gemini",
-  cohere: "cohere",
-  cerebras: "cerebras",
-  mistral: "mistral",
-  llama: "openai",
-  deepseek: "openai",
-  groq: "groq",
-  "fireworks-ai": "openai",
-  togetherai: "openai",
-  perplexity: null,
-  xai: "xai",
-  nvidia: null,
-  "amazon-bedrock": "bedrock",
-  azure: null,
-};
 
 /**
  * Build a map of modelId -> capabilities from models.dev data for a specific provider.

@@ -38,6 +38,7 @@ class ConnectorRunModel {
         totalBatches: t.totalBatches,
         completedBatches: t.completedBatches,
         itemErrors: t.itemErrors,
+        itemsSkipped: t.itemsSkipped,
         error: t.error,
         checkpoint: t.checkpoint,
         createdAt: t.createdAt,

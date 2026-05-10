@@ -3,6 +3,8 @@ import {
   DEFAULT_LLM_PROXY_NAME,
   type PaginationQuery,
   PLAYWRIGHT_MCP_CATALOG_ID,
+  parseFullToolName,
+  TOOL_QUERY_KNOWLEDGE_SOURCES_SHORT_NAME,
   urlSlugify,
 } from "@shared";
 import {
@@ -246,7 +248,7 @@ class AgentModel {
         .where(eq(schema.agentToolsTable.agentId, createdAgent.id)),
     ]);
 
-    return {
+    const result: Agent = {
       ...createdAgent,
       tools: assignedTools.map((row) => row.tool),
       teams: teamDetails,
@@ -255,6 +257,9 @@ class AgentModel {
       connectorIds: connectorIds ?? [],
       suggestedPrompts: suggestedPrompts ?? [],
     };
+    AgentModel.filterUnavailableKnowledgeTools([result]);
+
+    return result;
   }
 
   /**
@@ -386,6 +391,7 @@ class AgentModel {
       AgentModel.populateConnectorIds(agents),
       AgentModel.populateSuggestedPrompts(agents),
     ]);
+    AgentModel.filterUnavailableKnowledgeTools(agents);
 
     return agents;
   }
@@ -455,7 +461,7 @@ class AgentModel {
       toolsByAgent.set(row.agentId, existing);
     }
 
-    return agents.map((agent) => ({
+    const results = agents.map((agent) => ({
       ...agent,
       tools: toolsByAgent.get(agent.id) || [],
       teams: teamsMap.get(agent.id) || [],
@@ -464,6 +470,9 @@ class AgentModel {
       connectorIds: connectorMap.get(agent.id) || [],
       suggestedPrompts: suggestedPromptsMap.get(agent.id) || [],
     }));
+    AgentModel.filterUnavailableKnowledgeTools(results);
+
+    return results;
   }
 
   /**
@@ -537,7 +546,7 @@ class AgentModel {
       toolsByAgent.set(row.agentId, existing);
     }
 
-    return agents.map((agent) => ({
+    const results = agents.map((agent) => ({
       ...agent,
       tools: toolsByAgent.get(agent.id) || [],
       teams: teamsMap.get(agent.id) || [],
@@ -546,6 +555,9 @@ class AgentModel {
       connectorIds: connectorMap.get(agent.id) || [],
       suggestedPrompts: suggestedPromptsMap.get(agent.id) || [],
     }));
+    AgentModel.filterUnavailableKnowledgeTools(results);
+
+    return results;
   }
 
   static async findByLabels(
@@ -998,6 +1010,7 @@ class AgentModel {
       AgentModel.populateConnectorIds(agents),
       AgentModel.populateSuggestedPrompts(agents),
     ]);
+    AgentModel.filterUnavailableKnowledgeTools(agents);
 
     return createPaginatedResult(agents, Number(totalResult), pagination);
   }
@@ -1041,6 +1054,21 @@ class AgentModel {
         END
       `),
     ];
+  }
+
+  private static filterUnavailableKnowledgeTools(agents: Agent[]): void {
+    for (const agent of agents) {
+      const hasKnowledgeSources =
+        agent.knowledgeBaseIds.length > 0 || agent.connectorIds.length > 0;
+
+      if (hasKnowledgeSources) {
+        continue;
+      }
+
+      agent.tools = agent.tools.filter(
+        (tool) => !isQueryKnowledgeSourcesTool(tool.name),
+      );
+    }
   }
 
   /**
@@ -1189,6 +1217,7 @@ class AgentModel {
       AgentModel.populateAuthorNames([result]),
       AgentModel.populateSuggestedPrompts([result]),
     ]);
+    AgentModel.filterUnavailableKnowledgeTools([result]);
 
     return result;
   }
@@ -1236,7 +1265,7 @@ class AgentModel {
       .map((row) => row.tools)
       .filter((tool): tool is NonNullable<typeof tool> => tool !== null);
 
-    return {
+    const result: Agent = {
       ...agent,
       tools,
       teams: await AgentTeamModel.getTeamDetailsForAgent(agent.id),
@@ -1249,6 +1278,9 @@ class AgentModel {
       ),
       suggestedPrompts: [],
     };
+    AgentModel.filterUnavailableKnowledgeTools([result]);
+
+    return result;
   }
 
   private static async getOrCreateDefaultByType(
@@ -1782,6 +1814,78 @@ class AgentModel {
     return row?.id ?? null;
   }
 
+  /**
+   * Clone an agent and all its associations.
+   * Returns the newly created agent.
+   */
+  static async cloneAgent(params: {
+    sourceId: string;
+    userId: string;
+  }): Promise<Agent> {
+    const { sourceId, userId } = params;
+
+    const sourceAgent = await AgentModel.findById(sourceId, userId, true);
+    if (!sourceAgent) {
+      throw new Error("Source agent not found");
+    }
+
+    // Omit teams if scope is not 'team' — scope takes precedence
+    const cloneTeams =
+      sourceAgent.scope === "team" ? sourceAgent.teams.map((t) => t.id) : [];
+
+    let created: Agent | null = null;
+    try {
+      created = await AgentModel.create(
+        {
+          organizationId: sourceAgent.organizationId,
+          agentType: sourceAgent.agentType,
+          scope: sourceAgent.scope,
+          teams: cloneTeams,
+          labels: sourceAgent.labels,
+          knowledgeBaseIds: sourceAgent.knowledgeBaseIds ?? [],
+          connectorIds: sourceAgent.connectorIds ?? [],
+          suggestedPrompts: sourceAgent.suggestedPrompts ?? [],
+          name: `Copy of ${sourceAgent.name}`,
+          systemPrompt: sourceAgent.systemPrompt,
+          description: sourceAgent.description,
+          icon: sourceAgent.icon,
+          toolExposureMode: sourceAgent.toolExposureMode,
+          toolAssignmentMode: sourceAgent.toolAssignmentMode,
+          considerContextUntrusted: sourceAgent.considerContextUntrusted,
+          incomingEmailEnabled: sourceAgent.incomingEmailEnabled,
+          incomingEmailSecurityMode: sourceAgent.incomingEmailSecurityMode,
+          incomingEmailAllowedDomain: sourceAgent.incomingEmailAllowedDomain,
+          llmApiKeyId: null,
+          llmModel: sourceAgent.llmModel,
+          identityProviderId: null,
+          passthroughHeaders: null,
+        },
+        sourceAgent.scope === "personal" ? userId : undefined,
+      );
+
+      await AgentToolModel.cloneAssignments({
+        fromAgentId: sourceAgent.id,
+        toAgentId: created.id,
+      });
+
+      const clonedAgent = await AgentModel.findById(created.id, userId, true);
+      if (!clonedAgent) {
+        throw new Error("Failed to load cloned agent");
+      }
+
+      return clonedAgent;
+    } catch (error) {
+      if (created) {
+        try {
+          await AgentModel.delete(created.id);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      throw error;
+    }
+  }
+
   private static async generateUniqueSlug(name: string): Promise<string> {
     const baseSlug = urlSlugify(name) || "agent";
 
@@ -1830,6 +1934,13 @@ function errorMentions(error: unknown, needle: string): boolean {
   if (!(error instanceof Error)) return false;
   if (error.message.includes(needle)) return true;
   return errorMentions((error as { cause?: unknown }).cause, needle);
+}
+
+function isQueryKnowledgeSourcesTool(toolName: string): boolean {
+  return (
+    parseFullToolName(toolName).toolName ===
+    TOOL_QUERY_KNOWLEDGE_SOURCES_SHORT_NAME
+  );
 }
 
 export default AgentModel;

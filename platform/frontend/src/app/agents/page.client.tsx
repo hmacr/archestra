@@ -8,7 +8,7 @@ import {
 } from "@shared";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
-import { ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Upload } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import {
   ConnectDialogSection,
 } from "@/components/connect-dialog";
 import { DeleteConfirmDialog } from "@/components/delete-confirm-dialog";
+import { ImportAgentDialog } from "@/components/import-agent-dialog";
 import { LoadingSpinner, LoadingWrapper } from "@/components/loading";
 import { PageLayout } from "@/components/page-layout";
 import { PermissionRequirementHint } from "@/components/permission-requirement-hint";
@@ -36,7 +37,9 @@ import { DataTable } from "@/components/ui/data-table";
 import { PermissionButton } from "@/components/ui/permission-button";
 import { DEFAULT_SORT_BY, DEFAULT_SORT_DIRECTION } from "@/consts";
 import {
+  useCloneAgent,
   useDeleteProfile,
+  useExportAgent,
   useProfile,
   useProfiles,
   useProfilesPaginated,
@@ -196,6 +199,23 @@ function Agents({ initialData }: { initialData?: AgentsInitialData }) {
   const [editingAgent, setEditingAgent] = useState<AgentData | null>(null);
   const [viewingAgent, setViewingAgent] = useState<AgentData | null>(null);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
+
+  const cloneAgent = useCloneAgent();
+
+  const handleClone = useCallback(
+    async (agentId: string) => {
+      try {
+        const cloned = await cloneAgent.mutateAsync(agentId);
+        if (cloned) {
+          // Open edit dialog for the cloned agent so user can rename immediately
+          setEditingAgent(cloned as AgentData);
+        }
+      } catch (_error) {}
+    },
+    [cloneAgent],
+  );
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const exportAgent = useExportAgent();
 
   // Handle 'create' URL parameter to open the Create Agent dialog
   useEffect(() => {
@@ -443,6 +463,23 @@ function Agents({ initialData }: { initialData?: AgentsInitialData }) {
               setViewingAgent(agentData);
             }}
             onDelete={setDeletingAgentId}
+            onClone={handleClone}
+            onExport={(agentData) => {
+              exportAgent.mutate(agentData.id, {
+                onSuccess: (data) => {
+                  if (!data) return;
+                  const blob = new Blob([JSON.stringify(data, null, 2)], {
+                    type: "application/json",
+                  });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = `${agentData.name.replace(/\s+/g, "-").toLowerCase()}-agent.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                },
+              });
+            }}
           />
         );
       },
@@ -463,14 +500,24 @@ function Agents({ initialData }: { initialData?: AgentsInitialData }) {
           </p>
         }
         actionButton={
-          <PermissionButton
-            permissions={{ agent: ["create"] }}
-            onClick={() => setIsCreateDialogOpen(true)}
-            data-testid={E2eTestId.CreateAgentButton}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Agent
-          </PermissionButton>
+          <div className="flex gap-2">
+            <PermissionButton
+              variant="outline"
+              permissions={{ agent: ["create"] }}
+              onClick={() => setIsImportDialogOpen(true)}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import Agent
+            </PermissionButton>
+            <PermissionButton
+              permissions={{ agent: ["create"] }}
+              onClick={() => setIsCreateDialogOpen(true)}
+              data-testid={E2eTestId.CreateAgentButton}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Create Agent
+            </PermissionButton>
+          </div>
         }
       >
         <div>
@@ -553,6 +600,12 @@ function Agents({ initialData }: { initialData?: AgentsInitialData }) {
                 onOpenChange={(open) => !open && setDeletingAgentId(null)}
               />
             )}
+
+            <ImportAgentDialog
+              open={isImportDialogOpen}
+              onOpenChange={setIsImportDialogOpen}
+              onSuccess={() => {}}
+            />
           </div>
         </div>
       </PageLayout>

@@ -7,6 +7,16 @@ import {
 } from "@shared";
 import type { ReactNode } from "react";
 import type { UseFormReturn } from "react-hook-form";
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { getFrontendDocsUrl } from "@/lib/docs/docs";
 import { AsanaConfigFields } from "./asana-config-fields";
 import { ConfluenceConfigFields } from "./confluence-config-fields";
@@ -17,6 +27,7 @@ import { GitlabConfigFields } from "./gitlab-config-fields";
 import { JiraConfigFields } from "./jira-config-fields";
 import { LinearConfigFields } from "./linear-config-fields";
 import { NotionConfigFields } from "./notion-config-fields";
+import { OneDriveConfigFields } from "./onedrive-config-fields";
 import { OutlineConfigFields } from "./outline-config-fields";
 import { SalesforceConfigFields } from "./salesforce-config-fields";
 import { ServiceNowConfigFields } from "./servicenow-config-fields";
@@ -33,9 +44,9 @@ export type ConnectorUrlConfig = {
 };
 
 export type ConnectorCredentialConfig = {
-  apiTokenLabel: string;
-  apiTokenPlaceholder: string;
-  apiTokenRequiredMessage: string;
+  apiTokenLabel?: string;
+  apiTokenPlaceholder?: string;
+  apiTokenRequiredMessage?: string;
   apiTokenHelpText?: ReactNode;
 };
 
@@ -65,7 +76,9 @@ const CONNECTOR_DISPLAY_LABELS: Record<ConnectorType, string> = {
   dropbox: "Dropbox",
   asana: CONNECTOR_TYPE_LABELS.asana,
   outline: CONNECTOR_TYPE_LABELS.outline,
+  onedrive: CONNECTOR_TYPE_LABELS.onedrive ?? "OneDrive",
   salesforce: CONNECTOR_TYPE_LABELS.salesforce ?? "Salesforce",
+  file_upload: CONNECTOR_TYPE_LABELS.file_upload,
 };
 
 export const CONNECTOR_OPTIONS: ConnectorOption[] = [
@@ -130,9 +143,19 @@ export const CONNECTOR_OPTIONS: ConnectorOption[] = [
     description: "Sync documents from Outline",
   },
   {
+    type: "onedrive",
+    label: CONNECTOR_DISPLAY_LABELS.onedrive,
+    description: "Sync files and documents from OneDrive for Business",
+  },
+  {
     type: "salesforce",
     label: CONNECTOR_DISPLAY_LABELS.salesforce,
     description: "Sync CRM objects from Salesforce",
+  },
+  {
+    type: "file_upload",
+    label: CONNECTOR_DISPLAY_LABELS.file_upload,
+    description: "Upload your own text files and zip archives",
   },
 ];
 
@@ -185,6 +208,7 @@ const CONNECTOR_URL_CONFIGS: Record<ConnectorType, ConnectorUrlConfig | null> =
     gdrive: null,
     dropbox: null,
     asana: null,
+    onedrive: null,
     outline: {
       fieldName: "config.outlineUrl",
       label: "Instance URL",
@@ -199,6 +223,7 @@ const CONNECTOR_URL_CONFIGS: Record<ConnectorType, ConnectorUrlConfig | null> =
       description:
         "Use https://login.salesforce.com for production and https://test.salesforce.com for sandbox.",
     },
+    file_upload: null,
   };
 
 const CREATE_ADVANCED_CONFIG_FIELDS: Record<
@@ -209,7 +234,7 @@ const CREATE_ADVANCED_CONFIG_FIELDS: Record<
   confluence: ({ form }) => (
     <ConfluenceConfigFields form={form} hideUrl hideIsCloud />
   ),
-  github: ({ form }) => <GithubConfigFields form={form} hideUrl />,
+  github: ({ form }) => <GithubConfigFields form={form} hideUrl hideOwner />,
   gitlab: ({ form }) => <GitlabConfigFields form={form} hideUrl />,
   linear: ({ form }) => <LinearConfigFields form={form} />,
   servicenow: ({ form }) => <ServiceNowConfigFields form={form} hideUrl />,
@@ -218,8 +243,10 @@ const CREATE_ADVANCED_CONFIG_FIELDS: Record<
   gdrive: ({ form }) => <GoogleDriveConfigFields form={form} />,
   dropbox: ({ form }) => <DropboxConfigFields control={form.control} />,
   asana: ({ form }) => <AsanaConfigFields form={form} hideWorkspaceGid />,
+  onedrive: ({ form }) => <OneDriveConfigFields form={form} />,
   outline: ({ form }) => <OutlineConfigFields form={form} />,
   salesforce: ({ form }) => <SalesforceConfigFields form={form} />,
+  file_upload: () => null,
 };
 
 const EDIT_ADVANCED_CONFIG_FIELDS: Record<
@@ -227,6 +254,7 @@ const EDIT_ADVANCED_CONFIG_FIELDS: Record<
   (props: AdvancedConfigFieldsProps) => ReactNode
 > = {
   ...CREATE_ADVANCED_CONFIG_FIELDS,
+  github: ({ form }) => <GithubConfigFields form={form} hideUrl />,
   asana: ({ form }) => <AsanaConfigFields form={form} />,
 };
 
@@ -282,8 +310,10 @@ export function getDefaultConnectorConfig(
     gdrive: { type, recursive: true },
     dropbox: { type, rootPath: "" },
     asana: { type },
+    onedrive: { type, userIds: "", recursive: true },
     outline: { type, outlineUrl: "https://app.getoutline.com" },
     salesforce: { type, loginUrl: "https://login.salesforce.com" },
+    file_upload: { type },
   };
 
   return { ...defaultConfigs[type] };
@@ -308,7 +338,7 @@ export function getConnectorCredentialConfig(params: {
     ? "API token is required"
     : "API token or personal access token is required";
 
-  const apiTokenLabels: Record<ConnectorType, string> = {
+  const apiTokenLabels: Record<ConnectorType, string | undefined> = {
     servicenow: "Password",
     notion: "Integration Token",
     sharepoint: "Client Secret",
@@ -321,26 +351,31 @@ export function getConnectorCredentialConfig(params: {
     gitlab: "Personal Access Token",
     linear: "Personal Access Token",
     asana: "Personal Access Token",
+    onedrive: "Client Secret",
     salesforce: "Password + Security Token",
+    file_upload: undefined,
   };
 
-  const createApiTokenPlaceholders: Record<ConnectorType, string> = {
-    servicenow: "Your ServiceNow password",
-    notion: "secret_...",
-    sharepoint: "Your Azure AD client secret",
-    gdrive: "Paste service account JSON key or OAuth access token",
-    dropbox: "Your Dropbox access token",
-    outline: "Your Outline API key (starts with ol_api_)",
-    jira: jiraConfluenceApiTokenPlaceholder,
-    confluence: jiraConfluenceApiTokenPlaceholder,
-    github: "Your personal access token",
-    gitlab: "Your personal access token",
-    linear: "Your personal access token",
-    asana: "Your personal access token",
-    salesforce: "Your Salesforce password followed by your security token",
-  };
+  const createApiTokenPlaceholders: Record<ConnectorType, string | undefined> =
+    {
+      servicenow: "Your ServiceNow password",
+      notion: "secret_...",
+      sharepoint: "Your Azure AD client secret",
+      gdrive: "Paste service account JSON key or OAuth access token",
+      dropbox: "Your Dropbox access token",
+      outline: "Your Outline API key (starts with ol_api_)",
+      jira: jiraConfluenceApiTokenPlaceholder,
+      confluence: jiraConfluenceApiTokenPlaceholder,
+      github: "Your personal access token",
+      gitlab: "Your personal access token",
+      linear: "Your personal access token",
+      asana: "Your personal access token",
+      onedrive: "Your Azure AD client secret",
+      salesforce: "Your Salesforce password followed by your security token",
+      file_upload: undefined,
+    };
 
-  const editApiTokenPlaceholders: Record<ConnectorType, string> = {
+  const editApiTokenPlaceholders: Record<ConnectorType, string | undefined> = {
     servicenow: "Leave empty to keep existing password",
     salesforce: "Leave empty to keep existing password + security token",
     notion: "Leave empty to keep existing token",
@@ -354,9 +389,11 @@ export function getConnectorCredentialConfig(params: {
     gitlab: "Leave empty to keep existing token",
     linear: "Leave empty to keep existing token",
     asana: "Leave empty to keep existing token",
+    file_upload: undefined,
+    onedrive: "Leave empty to keep existing token",
   };
 
-  const apiTokenRequiredMessages: Record<ConnectorType, string> = {
+  const apiTokenRequiredMessages: Record<ConnectorType, string | undefined> = {
     servicenow: "Password is required",
     notion: "Integration token is required",
     sharepoint: "Client secret is required",
@@ -369,7 +406,9 @@ export function getConnectorCredentialConfig(params: {
     gitlab: "Personal access token is required",
     linear: "Personal access token is required",
     asana: "Personal access token is required",
+    onedrive: "Client secret is required",
     salesforce: "Password and security token are required",
+    file_upload: undefined,
   };
 
   const apiTokenHelpText = getApiTokenHelpText({
@@ -396,6 +435,15 @@ function getApiTokenHelpText(params: {
     return (
       <p className="text-[0.8rem] text-muted-foreground">
         The Azure AD app registration requires the <code>Sites.Read.All</code>{" "}
+        permission on Microsoft Graph.
+      </p>
+    );
+  }
+
+  if (params.type === "onedrive") {
+    return (
+      <p className="text-[0.8rem] text-muted-foreground">
+        The Azure AD app registration requires the <code>Files.Read.All</code>{" "}
         permission on Microsoft Graph.
       </p>
     );
@@ -440,4 +488,425 @@ function getApiTokenHelpText(params: {
   }
 
   return undefined;
+}
+
+type InlineConfigFieldsProps = {
+  form: ConnectorForm;
+  emailRequired: boolean;
+  mode: "create" | "edit";
+};
+
+const INLINE_CONFIG_FIELDS: Record<
+  ConnectorType,
+  (props: InlineConfigFieldsProps) => ReactNode
+> = {
+  jira: ({ form, emailRequired, mode }) => (
+    <>
+      <FormField
+        control={form.control}
+        name={"config.isCloud"}
+        render={({ field }) => (
+          <FormItem className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <FormLabel>Cloud Instance</FormLabel>
+              <FormDescription>
+                Enable if this is a cloud-hosted instance.
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={(field.value as boolean) ?? true}
+                onCheckedChange={field.onChange}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="email"
+        rules={
+          mode === "create"
+            ? {
+                validate: (value) => {
+                  const currentIsCloud = form.getValues("config.isCloud");
+                  if (currentIsCloud !== false && !value)
+                    return "Email is required";
+                  return true;
+                },
+              }
+            : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>
+              Email{(mode === "edit" || !emailRequired) && " (optional)"}
+            </FormLabel>
+            <FormControl>
+              <Input
+                type="email"
+                placeholder={
+                  emailRequired
+                    ? "user@example.com"
+                    : "Required for basic auth, leave empty for PAT"
+                }
+                {...field}
+              />
+            </FormControl>
+            {mode === "edit" && (
+              <FormDescription>
+                Leave empty to keep existing credentials unchanged.
+              </FormDescription>
+            )}
+            {mode === "create" && !emailRequired && (
+              <FormDescription>
+                Leave empty to authenticate with a personal access token
+                instead.
+              </FormDescription>
+            )}
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
+  ),
+  confluence: ({ form, emailRequired, mode }) => (
+    <>
+      <FormField
+        control={form.control}
+        name={"config.isCloud"}
+        render={({ field }) => (
+          <FormItem className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <FormLabel>Cloud Instance</FormLabel>
+              <FormDescription>
+                Enable if this is a cloud-hosted instance.
+              </FormDescription>
+            </div>
+            <FormControl>
+              <Switch
+                checked={(field.value as boolean) ?? true}
+                onCheckedChange={field.onChange}
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="email"
+        rules={
+          mode === "create"
+            ? {
+                validate: (value) => {
+                  const currentIsCloud = form.getValues("config.isCloud");
+                  if (currentIsCloud !== false && !value)
+                    return "Email is required";
+                  return true;
+                },
+              }
+            : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>
+              Email{(mode === "edit" || !emailRequired) && " (optional)"}
+            </FormLabel>
+            <FormControl>
+              <Input
+                type="email"
+                placeholder={
+                  emailRequired
+                    ? "user@example.com"
+                    : "Required for basic auth, leave empty for PAT"
+                }
+                {...field}
+              />
+            </FormControl>
+            {mode === "edit" && (
+              <FormDescription>
+                Leave empty to keep existing credentials unchanged.
+              </FormDescription>
+            )}
+            {mode === "create" && !emailRequired && (
+              <FormDescription>
+                Leave empty to authenticate with a personal access token
+                instead.
+              </FormDescription>
+            )}
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
+  ),
+  github: ({ form, mode }) =>
+    mode === "create" ? (
+      <FormField
+        control={form.control}
+        name={"config.owner"}
+        rules={{ required: "Owner is required" }}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Owner</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="my-org"
+                {...field}
+                value={(field.value as string) ?? ""}
+              />
+            </FormControl>
+            <FormDescription>GitHub organization or username.</FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    ) : null,
+  gitlab: () => null,
+  linear: () => null,
+  servicenow: ({ form, mode }) => (
+    <FormField
+      control={form.control}
+      name="email"
+      rules={
+        mode === "create" ? { required: "Username is required" } : undefined
+      }
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>Username</FormLabel>
+          <FormControl>
+            <Input
+              placeholder={
+                mode === "create"
+                  ? "admin"
+                  : "Leave empty to keep existing credentials"
+              }
+              {...field}
+            />
+          </FormControl>
+          {mode === "create" && (
+            <FormDescription>
+              Your ServiceNow username for basic authentication.
+            </FormDescription>
+          )}
+          {mode === "edit" && (
+            <FormDescription>
+              Leave empty to keep existing credentials unchanged.
+            </FormDescription>
+          )}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  ),
+  notion: () => <></>,
+  sharepoint: ({ form, mode }) => (
+    <>
+      <FormField
+        control={form.control}
+        name={"config.tenantId"}
+        rules={
+          mode === "create" ? { required: "Tenant ID is required" } : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Tenant ID</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                {...field}
+                value={(field.value as string) ?? ""}
+              />
+            </FormControl>
+            <FormDescription>
+              Your Azure AD (Entra ID) tenant ID or domain.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="email"
+        rules={
+          mode === "create" ? { required: "Client ID is required" } : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Client ID</FormLabel>
+            <FormControl>
+              <Input
+                placeholder={
+                  mode === "create"
+                    ? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    : "Leave empty to keep existing credentials"
+                }
+                {...field}
+              />
+            </FormControl>
+            <FormDescription>
+              Azure AD app registration Client ID.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
+  ),
+  gdrive: () => <></>,
+  dropbox: () => <></>,
+  asana: ({ form, mode }) =>
+    mode === "create" ? (
+      <FormField
+        control={form.control}
+        name={"config.workspaceGid"}
+        rules={{ required: "Workspace GID is required" }}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Workspace GID</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="1234567890"
+                {...field}
+                value={(field.value as string) ?? ""}
+              />
+            </FormControl>
+            <FormDescription>
+              Your Asana workspace GID. Syncs top-level tasks only &mdash;
+              subtasks aren&apos;t supported in the initial version.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    ) : null,
+  onedrive: ({ form, mode }) => (
+    <>
+      <FormField
+        control={form.control}
+        name={"config.tenantId"}
+        rules={
+          mode === "create" ? { required: "Tenant ID is required" } : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Tenant ID</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                {...field}
+                value={(field.value as string) ?? ""}
+              />
+            </FormControl>
+            <FormDescription>
+              Your Azure AD (Entra ID) tenant ID or domain.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="email"
+        rules={
+          mode === "create" ? { required: "Client ID is required" } : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>Client ID</FormLabel>
+            <FormControl>
+              <Input
+                placeholder={
+                  mode === "create"
+                    ? "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    : "Leave empty to keep existing credentials"
+                }
+                {...field}
+              />
+            </FormControl>
+            <FormDescription>
+              Azure AD app registration Client ID.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name={"config.userIds"}
+        rules={
+          mode === "create"
+            ? { required: "At least one user ID is required" }
+            : undefined
+        }
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>User IDs</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="user@example.com, user2@example.com"
+                {...field}
+                value={
+                  Array.isArray(field.value)
+                    ? (field.value as string[]).join(", ")
+                    : ((field.value as string) ?? "")
+                }
+              />
+            </FormControl>
+            <FormDescription>
+              Comma-separated list of user principal names or object IDs whose
+              OneDrive to sync.
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
+  ),
+  outline: () => <></>,
+  salesforce: ({ form, mode }) => (
+    <FormField
+      control={form.control}
+      name="email"
+      rules={mode === "create" ? { required: "Email is required" } : undefined}
+      render={({ field }) => (
+        <FormItem>
+          <FormLabel>Email{mode === "edit" && " (optional)"}</FormLabel>
+          <FormControl>
+            <Input
+              type="email"
+              placeholder={
+                mode === "create"
+                  ? "user@example.com"
+                  : "Leave empty to keep existing credentials"
+              }
+              {...field}
+            />
+          </FormControl>
+          {mode === "edit" && (
+            <FormDescription>
+              Leave empty to keep existing credentials unchanged.
+            </FormDescription>
+          )}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  ),
+  file_upload: () => <></>,
+};
+
+export function ConnectorInlineConfigFields({
+  connectorType,
+  form,
+  mode,
+  emailRequired,
+}: {
+  connectorType: ConnectorType;
+  form: ConnectorForm;
+  mode: "create" | "edit";
+  emailRequired: boolean;
+}) {
+  const renderFields = INLINE_CONFIG_FIELDS[connectorType];
+  return <>{renderFields({ form, emailRequired, mode })}</>;
 }

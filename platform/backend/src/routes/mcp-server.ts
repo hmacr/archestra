@@ -1,5 +1,5 @@
 import type { IncomingHttpHeaders } from "node:http";
-import { isPlaywrightCatalogItem, RouteId } from "@shared";
+import { isPlaywrightCatalogItem, OAUTH_TOKEN_TYPE, RouteId } from "@shared";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { hasPermission, userHasPermission } from "@/auth";
@@ -21,6 +21,7 @@ import {
 import { isByosEnabled, secretManager } from "@/secrets-manager";
 import { filterMcpServersAssignableToTarget } from "@/services/agent-tool-assignment";
 import { refreshLinkedIdentityProviderAccessToken } from "@/services/identity-providers/access-token-refresh";
+import { exchangeIdJagAtProtectedResource } from "@/services/identity-providers/enterprise-managed/broker";
 import { exchangeEnterpriseManagedCredential } from "@/services/identity-providers/enterprise-managed/exchange";
 import {
   findExternalIdentityProviderById,
@@ -40,6 +41,7 @@ import {
   SelectMcpServerSchema,
   UuidIdSchema,
 } from "@/types";
+import { broadcastMcpInstallationStatus } from "@/websocket";
 
 const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
   fastify.get(
@@ -237,7 +239,12 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
               await AgentToolModel.bulkCreateForAgentsAndTools(
                 targetAgentIds,
                 toolIds,
-                { mcpServerId: existingPersonal.id },
+                {
+                  mcpServerId: existingPersonal.id,
+                  credentialResolutionMode: catalogItem.enterpriseManagedConfig
+                    ? "enterprise_managed"
+                    : "static",
+                },
               );
             }
             return reply.send(existingPersonal);
@@ -616,12 +623,15 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
             // Capture catalogId before async callback to ensure it's available
             const capturedCatalogId = catalogItem.id;
             const capturedCatalogName = catalogItem.name;
+            const capturedEnterpriseManagedConfig =
+              catalogItem.enterpriseManagedConfig;
 
             // Set status to pending before starting the deployment
             await McpServerModel.update(mcpServer.id, {
               localInstallationStatus: "pending",
               localInstallationError: null,
             });
+            broadcastMcpInstallationStatus(mcpServer.id, "pending", null);
 
             await McpServerRuntimeManager.startServer(
               mcpServer,
@@ -665,6 +675,11 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
                   localInstallationStatus: "discovering-tools",
                   localInstallationError: null,
                 });
+                broadcastMcpInstallationStatus(
+                  mcpServer.id,
+                  "discovering-tools",
+                  null,
+                );
 
                 fastify.log.info(
                   `Attempting to fetch tools from local server: ${mcpServer.name}`,
@@ -710,7 +725,13 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
                       await AgentToolModel.bulkCreateForAgentsAndTools(
                         dedupedAgentIds,
                         toolIds,
-                        { mcpServerId: mcpServer.id },
+                        {
+                          mcpServerId: mcpServer.id,
+                          credentialResolutionMode:
+                            capturedEnterpriseManagedConfig
+                              ? "enterprise_managed"
+                              : "static",
+                        },
                       );
                     }
                   }
@@ -721,6 +742,7 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
                   localInstallationStatus: "success",
                   localInstallationError: null,
                 });
+                broadcastMcpInstallationStatus(mcpServer.id, "success", null);
 
                 fastify.log.info(
                   `Successfully fetched and persisted ${tools.length} tools from local server: ${mcpServer.name}`,
@@ -739,6 +761,11 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
                   localInstallationStatus: "error",
                   localInstallationError: errorMessage,
                 });
+                broadcastMcpInstallationStatus(
+                  mcpServer.id,
+                  "error",
+                  errorMessage,
+                );
               }
             })();
 
@@ -760,6 +787,11 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
               localInstallationStatus: "error",
               localInstallationError: `Failed to start deployment: ${errorMessage}`,
             });
+            broadcastMcpInstallationStatus(
+              mcpServer.id,
+              "error",
+              `Failed to start deployment: ${errorMessage}`,
+            );
 
             // Return the server with error status instead of throwing 500
             return reply.send({
@@ -824,7 +856,12 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
               await AgentToolModel.bulkCreateForAgentsAndTools(
                 dedupedAgentIds,
                 toolIds,
-                { mcpServerId: mcpServer.id },
+                {
+                  mcpServerId: mcpServer.id,
+                  credentialResolutionMode: catalogItem.enterpriseManagedConfig
+                    ? "enterprise_managed"
+                    : "static",
+                },
               );
             }
           }
@@ -835,6 +872,7 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
           localInstallationStatus: "success",
           localInstallationError: null,
         });
+        broadcastMcpInstallationStatus(mcpServer.id, "success", null);
 
         return reply.send({
           ...mcpServer,
@@ -1594,6 +1632,7 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
         localInstallationStatus: "pending",
         localInstallationError: null,
       });
+      broadcastMcpInstallationStatus(id, "pending", null);
 
       // Refetch the server with updated status
       const updatedServer = await McpServerModel.findById(id);
@@ -1632,17 +1671,20 @@ const mcpServerRoutes: FastifyPluginAsyncZod = async (fastify) => {
           await McpServerModel.update(id, {
             localInstallationStatus: "success",
           });
+          broadcastMcpInstallationStatus(id, "success", null);
           logger.info(
             { serverId: id, serverName: mcpServer.name },
             "MCP server reinstalled successfully",
           );
         } catch (error) {
           // Set status to error if reinstall fails
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
           await McpServerModel.update(id, {
             localInstallationStatus: "error",
-            localInstallationError:
-              error instanceof Error ? error.message : "Unknown error",
+            localInstallationError: errorMessage,
           });
+          broadcastMcpInstallationStatus(id, "error", errorMessage);
           logger.error(
             { err: error, serverId: id },
             "Failed to reinstall MCP server",
@@ -1855,44 +1897,148 @@ async function getInstallDiscoveryAccessToken(params: {
   >;
   userId: string;
 }): Promise<string | undefined> {
-  const account = await AccountModel.getLatestSsoAccountWithAccessTokenByUserId(
-    params.userId,
-  );
-  if (!account?.accessToken) {
-    return undefined;
-  }
-
-  const accessToken = await getCurrentIdentityProviderAccessToken(
-    params.userId,
-  );
-  if (!accessToken) {
-    return undefined;
-  }
-
   const enterpriseManagedConfig = params.catalogItem.enterpriseManagedConfig;
   if (!enterpriseManagedConfig) {
+    const accessToken = await getCurrentIdentityProviderAccessToken(
+      params.userId,
+    );
     return accessToken;
+  }
+
+  const fallbackAccount =
+    await AccountModel.getLatestSsoAccountWithAccessTokenByUserId(
+      params.userId,
+    );
+  if (!fallbackAccount) {
+    return undefined;
   }
 
   const identityProvider = enterpriseManagedConfig.identityProviderId
     ? await findExternalIdentityProviderById(
         enterpriseManagedConfig.identityProviderId,
       )
-    : await findExternalIdentityProviderByProviderId(account.providerId);
+    : await findExternalIdentityProviderByProviderId(
+        fallbackAccount.providerId,
+      );
   if (!identityProvider) {
-    return accessToken;
+    return getCurrentInstallDiscoveryAccessToken(fallbackAccount);
+  }
+
+  const account = await AccountModel.getLatestSsoAccountByUserIdAndProviderId(
+    params.userId,
+    identityProvider.providerId,
+  );
+  if (!account) {
+    return undefined;
+  }
+
+  const assertion = await getInstallDiscoverySubjectToken({
+    account,
+    identityProvider,
+  });
+  if (!assertion) {
+    return undefined;
   }
 
   const credential = await exchangeEnterpriseManagedCredential({
     identityProviderId: identityProvider.id,
-    assertion: accessToken,
+    assertion,
     enterpriseManagedConfig,
   });
+
+  if (shouldExchangeInstallIdJagAtProtectedResource(enterpriseManagedConfig)) {
+    const idJagAssertion = extractInstallDiscoveryCredentialValue({
+      credentialValue: credential.value,
+      responseFieldPath: enterpriseManagedConfig.responseFieldPath,
+    });
+    const protectedResourceCredential = await exchangeIdJagAtProtectedResource({
+      assertion: idJagAssertion,
+      identityProviderId: identityProvider.id,
+      enterpriseManagedConfig,
+    });
+
+    return extractInstallDiscoveryCredentialValue({
+      credentialValue: protectedResourceCredential.value,
+      responseFieldPath: enterpriseManagedConfig.responseFieldPath,
+    });
+  }
 
   return extractInstallDiscoveryCredentialValue({
     credentialValue: credential.value,
     responseFieldPath: enterpriseManagedConfig.responseFieldPath,
   });
+}
+
+async function getInstallDiscoverySubjectToken(params: {
+  account: NonNullable<
+    Awaited<
+      ReturnType<typeof AccountModel.getLatestSsoAccountByUserIdAndProviderId>
+    >
+  >;
+  identityProvider: NonNullable<
+    Awaited<ReturnType<typeof findExternalIdentityProviderById>>
+  >;
+}): Promise<string | undefined> {
+  if (shouldUseInstallDiscoveryIdToken(params.identityProvider)) {
+    return params.account.idToken ?? undefined;
+  }
+
+  return getCurrentInstallDiscoveryAccessToken(params.account);
+}
+
+async function getCurrentInstallDiscoveryAccessToken(
+  account: NonNullable<
+    Awaited<
+      ReturnType<typeof AccountModel.getLatestSsoAccountWithAccessTokenByUserId>
+    >
+  >,
+): Promise<string | undefined> {
+  if (!account.accessToken) {
+    return undefined;
+  }
+
+  const isAccessTokenExpired =
+    !!account.accessTokenExpiresAt &&
+    account.accessTokenExpiresAt <= new Date();
+  if (!isAccessTokenExpired) {
+    return account.accessToken;
+  }
+
+  return await refreshLinkedIdentityProviderAccessToken({
+    account: {
+      id: account.id,
+      providerId: account.providerId,
+      refreshToken: account.refreshToken,
+      refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+    },
+  });
+}
+
+function shouldUseInstallDiscoveryIdToken(
+  identityProvider: NonNullable<
+    Awaited<ReturnType<typeof findExternalIdentityProviderById>>
+  >,
+): boolean {
+  const enterpriseManagedCredentials =
+    identityProvider.oidcConfig?.enterpriseManagedCredentials;
+  return (
+    enterpriseManagedCredentials?.subjectTokenType ===
+      OAUTH_TOKEN_TYPE.IdToken ||
+    enterpriseManagedCredentials?.exchangeStrategy === "okta_managed"
+  );
+}
+
+function shouldExchangeInstallIdJagAtProtectedResource(
+  config: NonNullable<
+    NonNullable<
+      Awaited<ReturnType<typeof InternalMcpCatalogModel.findById>>
+    >["enterpriseManagedConfig"]
+  >,
+): boolean {
+  return (
+    config.requestedCredentialType === "id_jag" &&
+    config.resourceType === "oauth_protected_resource"
+  );
 }
 
 async function getSecretValues(

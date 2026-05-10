@@ -11,7 +11,9 @@ const SERVICENOW = z.literal("servicenow");
 const NOTION = z.literal("notion");
 const SHAREPOINT = z.literal("sharepoint");
 const GDRIVE = z.literal("gdrive");
+const FILE_UPLOAD = z.literal("file_upload");
 const DROPBOX = z.literal("dropbox");
+const ONEDRIVE = z.literal("onedrive");
 const ASANA = z.literal("asana");
 const OUTLINE = z.literal("outline");
 const LINEAR = z.literal("linear");
@@ -26,7 +28,9 @@ export const ConnectorTypeSchema = z.union([
   NOTION,
   SHAREPOINT,
   GDRIVE,
+  FILE_UPLOAD,
   DROPBOX,
+  ONEDRIVE,
   ASANA,
   LINEAR,
   OUTLINE,
@@ -292,6 +296,19 @@ export type GoogleDrivePruneCheckpoint = z.infer<
   typeof GoogleDrivePruneCheckpointSchema
 >;
 
+// ===== File Upload Config & Checkpoint =====
+
+export const FileUploadConfigSchema = z.object({
+  type: FILE_UPLOAD,
+});
+export type FileUploadConfig = z.infer<typeof FileUploadConfigSchema>;
+
+export const FileUploadCheckpointSchema = z.object({
+  type: FILE_UPLOAD,
+  lastSyncedAt: z.string().optional(),
+});
+export type FileUploadCheckpoint = z.infer<typeof FileUploadCheckpointSchema>;
+
 // ===== Asana Config & Checkpoint =====
 
 export const AsanaConfigSchema = z.object({
@@ -433,6 +450,33 @@ export type DropboxPruneCheckpoint = z.infer<
   typeof DropboxPruneCheckpointSchema
 >;
 
+// ===== OneDrive Config & Checkpoint =====
+
+export const OneDriveConfigSchema = z.object({
+  type: ONEDRIVE,
+  tenantId: z.string().min(1),
+  userIds: z.array(z.string()).min(1, "At least one user ID is required"),
+  folderId: z.string().optional(),
+  recursive: z.boolean().optional(),
+  maxDepth: z.number().int().min(1).max(100).optional(),
+  fileTypes: z.array(z.string()).optional(),
+  batchSize: z.number().optional(),
+});
+export type OneDriveConfig = z.infer<typeof OneDriveConfigSchema>;
+
+export const OneDriveCheckpointSchema = z.object({
+  type: ONEDRIVE,
+  lastSyncedAt: z.string().optional(),
+});
+export type OneDriveCheckpoint = z.infer<typeof OneDriveCheckpointSchema>;
+
+export const OneDrivePruneCheckpointSchema = BasePruneCheckpointSchema.extend({
+  type: ONEDRIVE,
+});
+export type OneDrivePruneCheckpoint = z.infer<
+  typeof OneDrivePruneCheckpointSchema
+>;
+
 // ===== Outline Config & Checkpoint =====
 
 export const OutlineConfigSchema = z.object({
@@ -468,7 +512,9 @@ export const ConnectorConfigSchema = z.discriminatedUnion("type", [
   NotionConfigSchema,
   SharePointConfigSchema,
   GoogleDriveConfigSchema,
+  FileUploadConfigSchema,
   DropboxConfigSchema,
+  OneDriveConfigSchema,
   AsanaConfigSchema,
   LinearConfigSchema,
   OutlineConfigSchema,
@@ -485,7 +531,9 @@ export const ConnectorCheckpointSchema = z.discriminatedUnion("type", [
   NotionCheckpointSchema,
   SharePointCheckpointSchema,
   GoogleDriveCheckpointSchema,
+  FileUploadCheckpointSchema,
   DropboxCheckpointSchema,
+  OneDriveCheckpointSchema,
   AsanaCheckpointSchema,
   LinearCheckpointSchema,
   OutlineCheckpointSchema,
@@ -546,9 +594,16 @@ export interface ConnectorItemFailure {
   error: string;
 }
 
+export interface ConnectorItemSkipped {
+  itemId: string | number;
+  name: string;
+  reason: string;
+}
+
 export interface ConnectorSyncBatch {
   documents: ConnectorDocument[];
   failures?: ConnectorItemFailure[];
+  skipped?: ConnectorItemSkipped[];
   checkpoint: ConnectorCheckpoint;
   hasMore: boolean;
 }
@@ -587,6 +642,7 @@ export interface Connector {
     config: Record<string, unknown>;
     credentials: ConnectorCredentials;
     checkpoint: Record<string, unknown> | null;
+    embeddingInputModalities?: ModelInputModality[];
   }): Promise<number | null>;
 
   sync(params: {

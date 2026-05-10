@@ -4,12 +4,17 @@ import { handleCheckDueConnectors } from "./check-due-connectors-handler";
 import { handleCheckDueScheduleTriggers } from "./check-due-schedule-triggers-handler";
 import { handleConnectorPrune } from "./connector-prune-handler";
 import { handleConnectorSync } from "./connector-sync-handler";
+import { handleProcessUploadedFiles } from "./process-uploaded-files-handler";
 import { handleScheduleTriggerRunExecution } from "./schedule-trigger-run-handler";
 
 export function registerTaskHandlers(taskQueueService: TaskQueueService): void {
   taskQueueService.registerHandler("connector_sync", handleConnectorSync);
   taskQueueService.registerHandler("connector_prune", handleConnectorPrune);
   taskQueueService.registerHandler("batch_embedding", handleBatchEmbedding);
+  taskQueueService.registerHandler(
+    "process_uploaded_files",
+    handleProcessUploadedFiles,
+  );
   taskQueueService.registerHandler(
     "check_due_connectors",
     handleCheckDueConnectors,

@@ -22,7 +22,10 @@ import {
   TeamModel,
 } from "@/models";
 import { initializeObservabilityMetrics } from "@/observability";
+import { serializeAgentForExport } from "@/services/agent-export";
+import { importAgentFromPayload } from "@/services/agent-import";
 import {
+  AgentExportPayloadSchema,
   type AgentScope,
   AgentScopeFilterSchema,
   ApiError,
@@ -30,6 +33,7 @@ import {
   constructResponseSchema,
   createSortingQuerySchema,
   DeleteObjectResponseSchema,
+  ImportAgentResponseSchema,
   InsertAgentSchema,
   SelectAgentSchema,
   UpdateAgentSchemaBase,
@@ -338,6 +342,47 @@ const agentRoutes: FastifyPluginAsyncZod = async (fastify) => {
   );
 
   fastify.post(
+    "/api/agents/import",
+    {
+      // Limit import payloads to 1 MiB — agent configs are small JSON files;
+      // rejecting oversized payloads protects against accidental or malicious abuse.
+      bodyLimit: 1 * 1024 * 1024,
+      schema: {
+        operationId: RouteId.ImportAgent,
+        description:
+          "Import an agent from a portable JSON payload. Creates a new agent with all resolvable associations and returns soft warnings for any references that could not be found.",
+        tags: ["Agents"],
+        body: AgentExportPayloadSchema,
+        response: constructResponseSchema(ImportAgentResponseSchema),
+      },
+    },
+    async ({ body, user, organizationId }, reply) => {
+      // Only agent type is supported for import
+      if (body.agent.agentType !== "agent") {
+        throw new ApiError(
+          400,
+          "Only internal agents can be imported. MCP gateways and LLM proxies are not supported.",
+        );
+      }
+
+      // Check create permission for agent type
+      const checker = await getAgentTypePermissionChecker({
+        userId: user.id,
+        organizationId,
+      });
+      checker.require("agent", "create");
+
+      const result = await importAgentFromPayload(
+        body,
+        user.id,
+        organizationId,
+      );
+
+      return reply.send(result);
+    },
+  );
+
+  fastify.post(
     "/api/agents",
     {
       schema: {
@@ -468,6 +513,12 @@ const agentRoutes: FastifyPluginAsyncZod = async (fastify) => {
         throw new ApiError(404, "Agent not found");
       }
 
+      // Defense-in-depth: never allow cross-organization access, even for admins.
+      // Permissions are scoped to the current organizationId.
+      if (agent.organizationId !== organizationId) {
+        throw new ApiError(404, "Agent not found");
+      }
+
       // Single DB query for all permission checks on this agent type
       const checker = await getAgentTypePermissionChecker({
         userId: user.id,
@@ -491,6 +542,189 @@ const agentRoutes: FastifyPluginAsyncZod = async (fastify) => {
       }
 
       return reply.send(agent);
+    },
+  );
+
+  fastify.post(
+    "/api/agents/:id/clone",
+    {
+      schema: {
+        operationId: RouteId.CloneAgent,
+        description: "Clone an agent and all its associations",
+        tags: ["Agents"],
+        params: z.object({
+          id: UuidIdSchema,
+        }),
+        response: constructResponseSchema(SelectAgentSchema),
+      },
+    },
+    async ({ params: { id }, user, organizationId }, reply) => {
+      // Fetch agent first to determine its type for permission checks
+      const sourceAgent = await AgentModel.findById(id, user.id, true);
+      if (!sourceAgent) {
+        throw new ApiError(404, "Agent not found");
+      }
+
+      // Prevent cross-organization cloning: the permission checker is scoped
+      // to the caller's org, so an agent from a different org would bypass
+      // those checks. Return 404 to avoid leaking existence.
+      if (sourceAgent.organizationId !== organizationId) {
+        throw new ApiError(404, "Agent not found");
+      }
+
+      // Disallow cloning built-in agents (Phase 1 policy)
+      if (sourceAgent.builtInAgentConfig) {
+        throw new ApiError(403, "Built-in agents cannot be cloned");
+      }
+
+      // Single DB query for all permission checks on this agent type
+      const checker = await getAgentTypePermissionChecker({
+        userId: user.id,
+        organizationId,
+      });
+
+      // Check read + create permission (return 404 to avoid leaking existence)
+      try {
+        checker.require(sourceAgent.agentType, "read");
+        checker.require(sourceAgent.agentType, "create");
+      } catch {
+        throw new ApiError(404, "Agent not found");
+      }
+
+      // Enforce scope-based modify permissions on the source agent
+      const userTeamIds = !checker.isAdmin(sourceAgent.agentType)
+        ? await TeamModel.getUserTeamIds(user.id)
+        : [];
+      requireAgentModifyPermission({
+        checker,
+        agentType: sourceAgent.agentType,
+        agentScope: sourceAgent.scope,
+        agentAuthorId: sourceAgent.authorId,
+        agentTeamIds: sourceAgent.teams.map((t) => t.id),
+        userTeamIds,
+        userId: user.id,
+      });
+
+      // Validate knowledgeBaseIds if provided
+      if ((sourceAgent.knowledgeBaseIds?.length ?? 0) > 0) {
+        if (sourceAgent.agentType === "llm_proxy") {
+          throw new ApiError(
+            400,
+            "Knowledge bases cannot be assigned to LLM Proxy agents",
+          );
+        }
+        const knowledgeSourceAccess =
+          await knowledgeSourceAccessControlService.buildAccessControlContext({
+            userId: user.id,
+            organizationId,
+          });
+        for (const kbId of sourceAgent.knowledgeBaseIds) {
+          await validateKnowledgeBaseAccess({
+            kbId,
+            organizationId,
+            access: knowledgeSourceAccess,
+          });
+        }
+      }
+
+      // Validate connectorIds if provided
+      if ((sourceAgent.connectorIds?.length ?? 0) > 0) {
+        if (sourceAgent.agentType === "llm_proxy") {
+          throw new ApiError(
+            400,
+            "Connectors cannot be assigned to LLM Proxy agents",
+          );
+        }
+        const knowledgeSourceAccess =
+          await knowledgeSourceAccessControlService.buildAccessControlContext({
+            userId: user.id,
+            organizationId,
+          });
+        for (const connectorId of sourceAgent.connectorIds) {
+          await validateConnectorAccess({
+            connectorId,
+            organizationId,
+            access: knowledgeSourceAccess,
+          });
+        }
+      }
+
+      // Delegate cloning logic to the model
+      const clonedAgent = await AgentModel.cloneAgent({
+        sourceId: sourceAgent.id,
+        userId: user.id,
+      });
+
+      return reply.send(clonedAgent);
+    },
+  );
+
+  fastify.get(
+    "/api/agents/:id/export",
+    {
+      schema: {
+        operationId: RouteId.ExportAgent,
+        description:
+          "Export an agent configuration as a portable JSON payload for cross-instance transfer",
+        tags: ["Agents"],
+        params: z.object({
+          id: UuidIdSchema,
+        }),
+        response: constructResponseSchema(AgentExportPayloadSchema),
+      },
+    },
+    async ({ params: { id }, user, organizationId }, reply) => {
+      // Fetch agent with admin=true first to check type, then enforce type-specific RBAC
+      const agent = await AgentModel.findById(id, user.id, true);
+
+      if (!agent) {
+        throw new ApiError(404, "Agent not found");
+      }
+
+      // Defense-in-depth: never allow cross-organization exports, even for admins.
+      // Permissions are scoped to the current organizationId.
+      if (agent.organizationId !== organizationId) {
+        throw new ApiError(404, "Agent not found");
+      }
+
+      // Only internal agents can be exported
+      if (agent.agentType !== "agent") {
+        throw new ApiError(
+          400,
+          "Only internal agents can be exported. MCP gateways and LLM proxies are not supported.",
+        );
+      }
+
+      // Built-in agents cannot be exported
+      if (agent.builtInAgentConfig) {
+        throw new ApiError(
+          400,
+          "Built-in agents cannot be exported. They contain internal configuration that is not portable.",
+        );
+      }
+
+      // Check read permission (return 404 to avoid leaking existence)
+      const checker = await getAgentTypePermissionChecker({
+        userId: user.id,
+        organizationId,
+      });
+
+      try {
+        checker.require(agent.agentType, "read");
+      } catch {
+        throw new ApiError(404, "Agent not found");
+      }
+
+      // Non-admin: re-fetch with team filtering to enforce access control
+      if (!checker.isAdmin(agent.agentType)) {
+        const filteredAgent = await AgentModel.findById(id, user.id, false);
+        if (!filteredAgent) {
+          throw new ApiError(404, "Agent not found");
+        }
+        return reply.send(await serializeAgentForExport(filteredAgent));
+      }
+
+      return reply.send(await serializeAgentForExport(agent));
     },
   );
 

@@ -3,7 +3,7 @@
 import { type archestraApiTypes, getConnectorNamePlaceholder } from "@shared";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { type Path, useForm } from "react-hook-form";
 import { KnowledgeSourceVisibilitySelector } from "@/app/knowledge/_parts/knowledge-source-visibility-selector";
 import { ExternalDocsLink } from "@/components/external-docs-link";
 import { StandardFormDialog } from "@/components/standard-dialog";
@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { useUpdateConnector } from "@/lib/knowledge/connector.query";
 import {
   ConnectorAdvancedConfigFields,
+  ConnectorInlineConfigFields,
   connectorNeedsEmail,
   getConnectorCredentialConfig,
   getConnectorDocsUrl,
@@ -260,8 +261,7 @@ export function EditConnectorDialog({
           {urlConfig && (
             <FormField
               control={form.control}
-              // biome-ignore lint/suspicious/noExplicitAny: form field name requires dynamic typing
-              name={urlConfig.fieldName as any}
+              name={urlConfig.fieldName as Path<EditConnectorFormValues>}
               rules={{ required: `${urlConfig.label} is required` }}
               render={({ field }) => (
                 <FormItem>
@@ -280,157 +280,53 @@ export function EditConnectorDialog({
             />
           )}
 
-          {(connectorType === "jira" || connectorType === "confluence") && (
-            <FormField
-              control={form.control}
-              // biome-ignore lint/suspicious/noExplicitAny: form field name requires dynamic typing
-              name={"config.isCloud" as any}
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Cloud Instance</FormLabel>
-                    <FormDescription>
-                      Enable if this is a cloud-hosted instance.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={(field.value as boolean) ?? true}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          )}
-
-          {needsEmail && (
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email{!emailRequired && " (optional)"}</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder={
-                        emailRequired
-                          ? "user@example.com"
-                          : "Required for basic auth, leave empty for PAT"
-                      }
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Leave empty to keep existing credentials unchanged.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {connectorType === "servicenow" && (
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Username</FormLabel>
-                  <FormControl>
-                    <Input placeholder="admin" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Leave empty to keep existing credentials unchanged.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {connectorType === "sharepoint" && (
-            <FormField
-              control={form.control}
-              name="config.tenantId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tenant ID</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                      {...field}
-                      value={(field.value as string) ?? ""}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Your Azure AD (Entra ID) tenant ID or domain.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          {connectorType === "sharepoint" && (
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Client ID</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Leave empty to keep existing credentials"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Azure AD app registration Client ID.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          <FormField
-            control={form.control}
-            name="apiToken"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{apiTokenLabel}</FormLabel>
-                <FormControl>
-                  <Input
-                    type="password"
-                    placeholder={apiTokenPlaceholder}
-                    {...field}
-                  />
-                </FormControl>
-                <FormDescription>
-                  Leave empty to keep existing credentials unchanged.
-                </FormDescription>
-                {apiTokenHelpText}
-                <FormMessage />
-              </FormItem>
-            )}
+          <ConnectorInlineConfigFields
+            connectorType={connectorType}
+            form={form}
+            mode="edit"
+            emailRequired={emailRequired}
           />
 
-          <Collapsible>
-            <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer group border-t pt-3">
-              <span className="text-sm font-medium">Advanced</span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-4 space-y-4">
-              <SchedulePicker form={form} name="schedule" />
-              <ConnectorAdvancedConfigFields
-                connectorType={connectorType}
-                form={form}
-                mode="edit"
+          {Boolean(apiTokenLabel) && (
+            <>
+              <FormField
+                control={form.control}
+                name="apiToken"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{apiTokenLabel}</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder={apiTokenPlaceholder}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Leave empty to keep existing credentials unchanged.
+                    </FormDescription>
+                    {apiTokenHelpText}
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-            </CollapsibleContent>
-          </Collapsible>
+
+              <Collapsible>
+                <CollapsibleTrigger className="flex w-full items-center justify-between cursor-pointer group border-t pt-3">
+                  <span className="text-sm font-medium">Advanced</span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-4 space-y-4">
+                  <SchedulePicker form={form} name="schedule" />
+                  <ConnectorAdvancedConfigFields
+                    connectorType={connectorType}
+                    form={form}
+                    mode="edit"
+                  />
+                </CollapsibleContent>
+              </Collapsible>
+            </>
+          )}
         </div>
       </Form>
     </StandardFormDialog>

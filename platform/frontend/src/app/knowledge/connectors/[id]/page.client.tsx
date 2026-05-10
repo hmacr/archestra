@@ -1,8 +1,11 @@
 "use client";
 
+import type { archestraApiTypes } from "@shared";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   ArrowLeft,
   Database,
+  Logs,
   MoreHorizontal,
   Pencil,
   Play,
@@ -15,18 +18,19 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import { ErrorBoundary } from "@/app/_parts/error-boundary";
-import { ConnectorPruneRuns } from "@/app/knowledge/connectors/_parts/connector-prune-runs";
+import { ConnectorFilesSection } from "@/app/knowledge/connectors/_parts/connector-files-section";
 import { ConnectorRunDetailsDialog } from "@/app/knowledge/connectors/_parts/connector-run-details-dialog";
-import { ConnectorSyncRuns } from "@/app/knowledge/connectors/_parts/connector-sync-runs";
 import { ConnectorStatusDot } from "@/app/knowledge/knowledge-bases/_parts/connector-enabled-dot";
 import { ConnectorTypeIcon } from "@/app/knowledge/knowledge-bases/_parts/connector-icons";
+import { ConnectorStatusBadge } from "@/app/knowledge/knowledge-bases/_parts/connector-status-badge";
 import { EditConnectorDialog } from "@/app/knowledge/knowledge-bases/_parts/edit-connector-dialog";
 import { FormDialog } from "@/components/form-dialog";
-import { LoadingSpinner } from "@/components/loading";
+import { LoadingSpinner, LoadingWrapper } from "@/components/loading";
 import { MetadataItem } from "@/components/metadata-card";
 import { PageLayout } from "@/components/page-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
 import {
   Dialog,
   DialogContent,
@@ -51,7 +55,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -61,6 +64,7 @@ import {
   useAssignConnectorToKnowledgeBases,
   useConnector,
   useConnectorKnowledgeBases,
+  useConnectorRuns,
   useForceResyncConnector,
   useSyncConnector,
   useTestConnectorConnection,
@@ -69,6 +73,9 @@ import {
 import { useKnowledgeBases } from "@/lib/knowledge/knowledge-base.query";
 import { formatDate } from "@/lib/utils";
 import { formatCronSchedule } from "@/lib/utils/format-cron";
+
+type ConnectorRunItem =
+  archestraApiTypes.GetConnectorRunsResponses["200"]["data"][number];
 
 export default function ConnectorDetailPage({
   connectorId,
@@ -103,8 +110,15 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isForceResyncOpen, setIsForceResyncOpen] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"sync" | "prune">("sync");
+  const [pageIndex, setPageIndex] = useState(0);
+  const pageSize = 10;
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+
+  const { data: runsData, isPending: isRunsPending } = useConnectorRuns({
+    connectorId,
+    limit: pageSize,
+    offset: pageIndex * pageSize,
+  });
 
   const handleSync = useCallback(async () => {
     await syncConnector.mutateAsync(connectorId);
@@ -113,6 +127,91 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
   const handleTestConnection = useCallback(async () => {
     await testConnection.mutateAsync(connectorId);
   }, [testConnection, connectorId]);
+
+  const handlePaginationChange = useCallback(
+    (newPagination: { pageIndex: number; pageSize: number }) => {
+      setPageIndex(newPagination.pageIndex);
+    },
+    [],
+  );
+
+  const columns: ColumnDef<ConnectorRunItem>[] = [
+    {
+      id: "status",
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        return <ConnectorStatusBadge status={row.original.status} />;
+      },
+    },
+    {
+      id: "startedAt",
+      accessorKey: "startedAt",
+      header: "Started",
+      cell: ({ row }) => (
+        <div className="font-mono text-xs">
+          {formatDate({ date: row.original.startedAt })}
+        </div>
+      ),
+    },
+    {
+      id: "completedAt",
+      header: "Completed",
+      cell: ({ row }) => (
+        <div className="font-mono text-xs">
+          {row.original.completedAt
+            ? formatDate({ date: row.original.completedAt })
+            : "-"}
+        </div>
+      ),
+    },
+    {
+      id: "documentsProcessed",
+      header: "Processed",
+      cell: ({ row }) => {
+        const processed = row.original.documentsProcessed ?? 0;
+        // totalItems will be available after codegen
+        const total = (row.original as Record<string, unknown>).totalItems as
+          | number
+          | null;
+        return (
+          <div>
+            {processed}
+            {total != null && total > 0 && (
+              <span className="text-muted-foreground"> / {total}</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      id: "documentsIngested",
+      header: "Ingested",
+      cell: ({ row }) => <div>{row.original.documentsIngested ?? 0}</div>,
+    },
+    {
+      id: "logs",
+      header: "Logs",
+      cell: ({ row }) => {
+        return (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                onClick={() => setSelectedRunId(row.original.id)}
+                aria-label="View run logs"
+              >
+                <Logs className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>View logs</TooltipContent>
+          </Tooltip>
+        );
+      },
+    },
+  ];
 
   if (isPending) {
     return <LoadingSpinner />;
@@ -171,7 +270,7 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
                     connector.lastSyncStatus === "running"
                   }
                 >
-                  <Play className="mr-2 h-4 w-4" />
+                  <Play className="h-4 w-4" />
                   {syncConnector.isPending
                     ? "Starting..."
                     : connector.lastSyncStatus === "running"
@@ -266,36 +365,45 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
             <MetadataItem label="Documents">
               <div>{connector.totalDocsIngested}</div>
             </MetadataItem>
-            <MetadataItem label="Schedule">
-              <div>{formatCronSchedule(connector.schedule)}</div>
-            </MetadataItem>
+            {connector.connectorType !== "file_upload" && (
+              <MetadataItem label="Schedule">
+                <div>{formatCronSchedule(connector.schedule)}</div>
+              </MetadataItem>
+            )}
             <KnowledgeBasesMetadataItem connectorId={connectorId} />
           </div>
         </div>
+        {connector.connectorType === "file_upload" ? (
+          <ConnectorFilesSection connectorId={connectorId} />
+        ) : (
+          <>
+            <h2 className="text-lg font-semibold">Sync Runs</h2>
 
-        <Tabs
-          value={activeTab}
-          onValueChange={(v) => setActiveTab(v as "sync" | "prune")}
-        >
-          <TabsList>
-            <TabsTrigger value="sync">Sync</TabsTrigger>
-            <TabsTrigger value="prune">Prune</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="sync" className="mt-4">
-            <ConnectorSyncRuns
-              connectorId={connectorId}
-              onViewLogs={setSelectedRunId}
-            />
-          </TabsContent>
-
-          <TabsContent value="prune" className="mt-4">
-            <ConnectorPruneRuns
-              connectorId={connectorId}
-              onViewLogs={setSelectedRunId}
-            />
-          </TabsContent>
-        </Tabs>
+            <LoadingWrapper
+              isPending={isRunsPending}
+              loadingFallback={<LoadingSpinner />}
+            >
+              {(runsData?.data ?? []).length === 0 ? (
+                <div className="text-muted-foreground">
+                  No sync runs yet. Trigger a manual sync or wait for the
+                  scheduled sync.
+                </div>
+              ) : (
+                <DataTable
+                  columns={columns}
+                  data={runsData?.data ?? []}
+                  manualPagination={true}
+                  pagination={{
+                    pageIndex,
+                    pageSize,
+                    total: runsData?.pagination?.total ?? 0,
+                  }}
+                  onPaginationChange={handlePaginationChange}
+                />
+              )}
+            </LoadingWrapper>
+          </>
+        )}
 
         <ConnectorRunDetailsDialog
           connectorId={connectorId}

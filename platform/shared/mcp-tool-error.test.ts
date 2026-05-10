@@ -13,6 +13,26 @@ describe("extractMcpToolError", () => {
         message: "Authentication required",
         catalogId: "cat_123",
         catalogName: "GitHub",
+        action: "install_mcp_credentials",
+        actionUrl: "http://localhost:3000/mcp/registry?install=cat_123",
+      }),
+    ).toEqual({
+      type: "auth_required",
+      message: "Authentication required",
+      catalogId: "cat_123",
+      catalogName: "GitHub",
+      action: "install_mcp_credentials",
+      actionUrl: "http://localhost:3000/mcp/registry?install=cat_123",
+    });
+  });
+
+  it("extracts a legacy auth-required MCP tool error with installUrl", () => {
+    expect(
+      extractMcpToolError({
+        type: "auth_required",
+        message: "Authentication required",
+        catalogId: "cat_123",
+        catalogName: "GitHub",
         installUrl: "http://localhost:3000/mcp/registry?install=cat_123",
       }),
     ).toEqual({
@@ -156,6 +176,26 @@ ${TOOL_INVOCATION_UNTRUSTED_CONTEXT_REASON}`),
       input: { branch: "main" },
       reason: TOOL_INVOCATION_NO_POLICY_UNTRUSTED_REASON,
       reasonType: "sensitive_context",
+    });
+  });
+
+  it("extracts tool state errors from structured content", () => {
+    expect(
+      extractMcpToolError({
+        structuredContent: {
+          archestraError: {
+            type: "tool_state",
+            code: "already_using_agent",
+            message: "Already using agent.",
+            toolName: "archestra__swap_agent",
+          },
+        },
+      }),
+    ).toEqual({
+      type: "tool_state",
+      code: "already_using_agent",
+      message: "Already using agent.",
+      toolName: "archestra__swap_agent",
     });
   });
 });

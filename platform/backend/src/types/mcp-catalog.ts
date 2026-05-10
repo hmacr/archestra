@@ -1,6 +1,7 @@
 import {
   EnvFromSchema,
   ImagePullSecretConfigSchema,
+  LocalConfigEnvironmentDefaultSchema,
   LocalConfigSchema,
   OAuthConfigSchema,
 } from "@shared";
@@ -47,6 +48,7 @@ export const UserConfigFieldSchema = z.object({
   min: z.number().optional(),
   max: z.number().optional(),
   headerName: z.string().optional(),
+  valuePrefix: z.string().optional(),
 });
 
 // Define a version of LocalConfigSchema for SELECT operations
@@ -64,7 +66,7 @@ const LocalConfigSelectSchema = z.object({
         promptOnInstallation: z.boolean(),
         required: z.boolean().optional(), // Optional in database
         description: z.string().optional(), // Optional in database
-        default: z.union([z.string(), z.number(), z.boolean()]).optional(), // Default value for installation dialog
+        default: LocalConfigEnvironmentDefaultSchema.optional(), // Default value for installation dialog
         mounted: z.boolean().optional(), // When true for secret type, mount as file at /secrets/<key>
       }),
     )
@@ -171,6 +173,8 @@ const UpdateInternalMcpCatalogSchemaBase = createUpdateSchema(
     updatedAt: true,
     organizationId: true,
     authorId: true,
+    // Tenancy is locked after creation
+    multitenant: true,
   });
 
 export const UpdateInternalMcpCatalogSchema =

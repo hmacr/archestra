@@ -1,6 +1,6 @@
 "use client";
 
-import { PROVIDERS_WITH_OPTIONAL_API_KEY } from "@shared";
+import { isProviderApiKeyOptional } from "@shared";
 import {
   ArrowUpRight,
   Info,
@@ -77,6 +77,7 @@ const DEFAULT_FORM_VALUES: LlmProviderApiKeyFormValues = {
   provider: "openai",
   apiKey: null,
   baseUrl: null,
+  extraHeaders: [],
   scope: "org",
   teamId: null,
   vaultSecretPath: null,
@@ -120,6 +121,7 @@ function AddApiKeyDialog({
 }) {
   const createMutation = useCreateLlmProviderApiKey();
   const byosEnabled = useFeature("byosEnabled");
+  const azureOpenAiEntraIdEnabled = useFeature("azureOpenAiEntraIdEnabled");
   const bedrockIamAuthEnabled = useFeature("bedrockIamAuthEnabled");
   const geminiVertexAiEnabled = useFeature("geminiVertexAiEnabled");
 
@@ -144,8 +146,10 @@ function AddApiKeyDialog({
     (formValues.scope !== "team" || formValues.teamId) &&
     (byosEnabled
       ? formValues.vaultSecretPath && formValues.vaultSecretKey
-      : PROVIDERS_WITH_OPTIONAL_API_KEY.has(formValues.provider) ||
-        formValues.apiKey);
+      : isProviderApiKeyOptional({
+          provider: formValues.provider,
+          azureEntraIdEnabled: azureOpenAiEntraIdEnabled === true,
+        }) || formValues.apiKey);
 
   const handleCreate = form.handleSubmit(async (values) => {
     try {
@@ -210,7 +214,7 @@ function AddApiKeyDialog({
           </Button>
           <Button type="submit" disabled={!isValid || createMutation.isPending}>
             {createMutation.isPending && (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             )}
             Test & Create
           </Button>
@@ -637,7 +641,7 @@ function KnowledgeSettingsContent() {
                   <p className="text-sm text-muted-foreground sm:pl-28">
                     Don't see your model?{" "}
                     <Link
-                      href="/llm/providers/models"
+                      href="/llm/model-providers/models"
                       className="inline-flex items-center gap-0.5 text-primary underline-offset-2 hover:underline"
                     >
                       Sync models and configure embedding dimensions

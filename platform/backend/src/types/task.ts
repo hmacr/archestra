@@ -20,6 +20,7 @@ export const TaskTypeSchema = z.enum([
   "connector_sync",
   "connector_prune",
   "batch_embedding",
+  "process_uploaded_files",
   "check_due_connectors",
   "check_due_schedule_triggers",
   "schedule_trigger_run_execute",

@@ -2,7 +2,6 @@ import type { ModelInputModality } from "@shared";
 import type { drive_v3 } from "googleapis";
 import { google } from "googleapis";
 import JSZip from "jszip";
-import mammoth from "mammoth";
 import type {
   ConnectorCredentials,
   ConnectorDocument,
@@ -16,10 +15,12 @@ import {
   buildCheckpoint,
   extractErrorMessage,
 } from "../base-connector";
+import { extractTextFromDocx } from "../docx-text-extractor";
 import {
   type FolderTraversalAdapter,
   traverseFolders,
 } from "../folder-traversal";
+import { parsePdfBuffer } from "../pdf-utils";
 
 const DEFAULT_BATCH_SIZE = 50;
 const MAX_CONTENT_LENGTH = 500_000; // 500 KB text limit per document
@@ -815,14 +816,10 @@ async function extractTextFromBinary(
 ): Promise<string> {
   switch (ext) {
     case ".docx": {
-      const result = await mammoth.extractRawText({ buffer });
-      return result.value;
+      return extractTextFromDocx(buffer);
     }
     case ".pdf": {
-      // Lazy import: pdf-parse v1 tries to load a test file at import time
-      const pdfParse = (await import("pdf-parse")).default;
-      const result = await pdfParse(buffer);
-      return result.text;
+      return parsePdfBuffer(buffer);
     }
     case ".pptx": {
       return extractTextFromPptx(buffer);

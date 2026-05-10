@@ -7,6 +7,7 @@ export const McpToolErrorTypeSchema = z.enum([
   "auth_expired",
   "assigned_credential_unavailable",
   "policy_denied",
+  "tool_state",
   "generic",
 ]);
 
@@ -17,13 +18,21 @@ export const GenericMcpToolErrorSchema = z
   })
   .strict();
 
+export const AuthRequiredActionSchema = z.enum([
+  "install_mcp_credentials",
+  "connect_identity_provider",
+]);
+
 export const AuthRequiredMcpToolErrorSchema = z
   .object({
     type: z.literal("auth_required"),
     message: z.string(),
     catalogId: z.string(),
     catalogName: z.string(),
-    installUrl: z.string().url(),
+    action: AuthRequiredActionSchema.optional(),
+    actionUrl: z.string().url().optional(),
+    installUrl: z.string().url().optional(),
+    providerId: z.string().optional(),
   })
   .strict();
 
@@ -63,18 +72,29 @@ export const PolicyDeniedMcpToolErrorSchema = z
   })
   .strict();
 
+export const ToolStateMcpToolErrorSchema = z
+  .object({
+    type: z.literal("tool_state"),
+    message: z.string(),
+    code: z.string(),
+    toolName: z.string().optional(),
+  })
+  .strict();
+
 export const McpToolErrorSchema = z.discriminatedUnion("type", [
   GenericMcpToolErrorSchema,
   AuthRequiredMcpToolErrorSchema,
   AuthExpiredMcpToolErrorSchema,
   AssignedCredentialUnavailableMcpToolErrorSchema,
   PolicyDeniedMcpToolErrorSchema,
+  ToolStateMcpToolErrorSchema,
 ]);
 
 export type GenericMcpToolError = z.infer<typeof GenericMcpToolErrorSchema>;
 export type AuthRequiredMcpToolError = z.infer<
   typeof AuthRequiredMcpToolErrorSchema
 >;
+export type AuthRequiredAction = z.infer<typeof AuthRequiredActionSchema>;
 export type AuthExpiredMcpToolError = z.infer<
   typeof AuthExpiredMcpToolErrorSchema
 >;
@@ -84,6 +104,7 @@ export type AssignedCredentialUnavailableMcpToolError = z.infer<
 export type PolicyDeniedMcpToolError = z.infer<
   typeof PolicyDeniedMcpToolErrorSchema
 >;
+export type ToolStateMcpToolError = z.infer<typeof ToolStateMcpToolErrorSchema>;
 export type PolicyDeniedReasonType = z.infer<
   typeof PolicyDeniedReasonTypeSchema
 >;

@@ -42,6 +42,43 @@ class AgentToolModel {
   // DELEGATION METHODS
   // ============================================================================
 
+  static async cloneAssignments(params: {
+    fromAgentId: string;
+    toAgentId: string;
+  }): Promise<void> {
+    const { fromAgentId, toAgentId } = params;
+
+    const rows = await db
+      .select({
+        ...getTableColumns(schema.agentToolsTable),
+      })
+      .from(schema.agentToolsTable)
+      .where(eq(schema.agentToolsTable.agentId, fromAgentId));
+
+    if (rows.length === 0) return;
+
+    await db
+      .insert(schema.agentToolsTable)
+      .values(
+        rows.map((r) => ({
+          agentId: toAgentId,
+          toolId: r.toolId,
+          mcpServerId: r.mcpServerId,
+          credentialResolutionMode: r.credentialResolutionMode,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [schema.agentToolsTable.agentId, schema.agentToolsTable.toolId],
+        set: {
+          mcpServerId: sql`excluded.mcp_server_id`,
+          credentialResolutionMode: sql`excluded.credential_resolution_mode`,
+          updatedAt: new Date(),
+        },
+      });
+  }
+
   /**
    * Assign a delegation to a target agent.
    * Creates the delegation tool if it doesn't exist, then creates the agent_tool assignment.
@@ -236,11 +273,13 @@ class AgentToolModel {
   // ============================================================================
 
   /**
-   * Get all MCP server IDs that a user has access to (through team membership or personal access).
+   * Get all MCP server IDs that a user has access to (through team
+   * membership, personal access, or org-scoped installations).
    * Used for filtering agent_tools to only show assignments with accessible credentials.
    */
   private static async getUserAccessibleMcpServerIds(
     userId: string,
+    organizationId?: string,
   ): Promise<string[]> {
     // Get MCP servers accessible through team membership
     const teamAccessibleServers = await db
@@ -258,8 +297,30 @@ class AgentToolModel {
     const personalIds =
       await McpServerUserModel.getUserPersonalMcpServerIds(userId);
 
+    const orgScopedIds = organizationId
+      ? await db
+          .select({ mcpServerId: schema.mcpServersTable.id })
+          .from(schema.mcpServersTable)
+          .innerJoin(
+            schema.internalMcpCatalogTable,
+            eq(
+              schema.mcpServersTable.catalogId,
+              schema.internalMcpCatalogTable.id,
+            ),
+          )
+          .where(
+            and(
+              eq(schema.mcpServersTable.scope, "org"),
+              eq(schema.internalMcpCatalogTable.organizationId, organizationId),
+            ),
+          )
+          .then((rows) => rows.map((s) => s.mcpServerId))
+      : [];
+
     // Combine and deduplicate
-    return [...new Set([...teamAccessibleIds, ...personalIds])];
+    return [
+      ...new Set([...teamAccessibleIds, ...personalIds, ...orgScopedIds]),
+    ];
   }
 
   // ============================================================================
@@ -487,7 +548,9 @@ class AgentToolModel {
   static async bulkCreateForAgentsAndTools(
     agentIds: string[],
     toolIds: string[],
-    options?: Partial<Pick<InsertAgentTool, "mcpServerId">>,
+    options?: Partial<
+      Pick<InsertAgentTool, "mcpServerId" | "credentialResolutionMode">
+    >,
   ): Promise<void> {
     if (agentIds.length === 0 || toolIds.length === 0) return;
 
@@ -496,6 +559,7 @@ class AgentToolModel {
       agentId: string;
       toolId: string;
       mcpServerId?: string | null;
+      credentialResolutionMode?: CredentialResolutionMode;
     }> = [];
 
     for (const agentId of agentIds) {
@@ -504,6 +568,9 @@ class AgentToolModel {
           agentId,
           toolId,
           ...(options?.mcpServerId ? { mcpServerId: options.mcpServerId } : {}),
+          ...(options?.credentialResolutionMode
+            ? { credentialResolutionMode: options.credentialResolutionMode }
+            : {}),
         });
       }
     }
@@ -536,6 +603,27 @@ class AgentToolModel {
         .insert(schema.agentToolsTable)
         .values(newAssignments)
         .onConflictDoNothing();
+    }
+
+    if (
+      (options?.mcpServerId || options?.credentialResolutionMode) &&
+      existingAssignments.length > 0
+    ) {
+      await db
+        .update(schema.agentToolsTable)
+        .set({
+          ...(options.mcpServerId ? { mcpServerId: options.mcpServerId } : {}),
+          ...(options.credentialResolutionMode
+            ? { credentialResolutionMode: options.credentialResolutionMode }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            inArray(schema.agentToolsTable.agentId, agentIds),
+            inArray(schema.agentToolsTable.toolId, toolIds),
+          ),
+        );
     }
   }
 
@@ -840,6 +928,7 @@ class AgentToolModel {
     };
     filters?: AgentToolFilters;
     userId?: string;
+    organizationId?: string;
     isAgentAdmin?: boolean;
     skipPagination?: boolean;
   }): Promise<PaginatedResult<AgentTool>> {
@@ -848,6 +937,7 @@ class AgentToolModel {
       sorting,
       filters,
       userId,
+      organizationId,
       isAgentAdmin,
       skipPagination = false,
     } = params;
@@ -873,7 +963,10 @@ class AgentToolModel {
       // Filter by accessible credentials (MCP servers)
       // Only show agent_tools where the user has access to the credential/execution source
       const accessibleMcpServerIds =
-        await AgentToolModel.getUserAccessibleMcpServerIds(userId);
+        await AgentToolModel.getUserAccessibleMcpServerIds(
+          userId,
+          organizationId,
+        );
 
       // Build credential access condition:
       // - No static MCP server binding, OR

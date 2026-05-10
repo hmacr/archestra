@@ -1,6 +1,6 @@
 "use client";
 
-import { PROVIDERS_WITH_OPTIONAL_API_KEY } from "@shared";
+import { isProviderApiKeyOptional } from "@shared";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -9,6 +9,8 @@ import {
   LLM_PROVIDER_API_KEY_PLACEHOLDER,
   LlmProviderApiKeyForm,
   type LlmProviderApiKeyFormValues,
+  PROVIDER_CONFIG,
+  serializeExtraHeaders,
 } from "@/components/llm-provider-api-key-form";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +18,7 @@ import {
   DialogForm,
   DialogStickyFooter,
 } from "@/components/ui/dialog";
+import { useHasPermissions } from "@/lib/auth/auth.query";
 import { useFeature } from "@/lib/config/config.query";
 import {
   useCreateLlmProviderApiKey,
@@ -44,20 +47,33 @@ export function CreateLlmProviderApiKeyDialog({
   const createMutation = useCreateLlmProviderApiKey();
   const { data: existingKeys = [] } = useLlmProviderApiKeys({ enabled: open });
   const byosEnabled = useFeature("byosEnabled");
+  const azureOpenAiEntraIdEnabled = useFeature("azureOpenAiEntraIdEnabled");
   const bedrockIamAuthEnabled = useFeature("bedrockIamAuthEnabled");
   const geminiVertexAiEnabled = useFeature("geminiVertexAiEnabled");
+  const { data: canCreateOrgScopedKey } = useHasPermissions({
+    llmProviderApiKey: ["admin"],
+  });
 
   const form = useForm<LlmProviderApiKeyFormValues>({
-    defaultValues: getDefaultFormValues(defaultValues),
+    defaultValues: getDefaultFormValues({
+      defaultValues,
+      canCreateOrgScopedKey: canCreateOrgScopedKey === true,
+    }),
   });
 
   useEffect(() => {
     if (!open) return;
-    form.reset(getDefaultFormValues(defaultValues));
-  }, [defaultValues, form, open]);
+    form.reset(
+      getDefaultFormValues({
+        defaultValues,
+        canCreateOrgScopedKey: canCreateOrgScopedKey === true,
+      }),
+    );
+  }, [canCreateOrgScopedKey, defaultValues, form, open]);
 
   const formValues = form.watch();
   const isValid = getIsCreateFormValid({
+    azureOpenAiEntraIdEnabled: azureOpenAiEntraIdEnabled === true,
     byosEnabled: Boolean(byosEnabled),
     values: formValues,
   });
@@ -65,10 +81,11 @@ export function CreateLlmProviderApiKeyDialog({
   const handleCreate = form.handleSubmit(async (values) => {
     try {
       await createMutation.mutateAsync({
-        name: values.name,
+        name: values.name?.trim() || PROVIDER_CONFIG[values.provider].name,
         provider: values.provider,
         apiKey: values.apiKey || undefined,
         baseUrl: values.baseUrl || undefined,
+        extraHeaders: serializeExtraHeaders(values.extraHeaders) ?? undefined,
         scope: values.scope,
         teamId:
           values.scope === "team" && values.teamId ? values.teamId : undefined,
@@ -122,7 +139,7 @@ export function CreateLlmProviderApiKeyDialog({
           </Button>
           <Button type="submit" disabled={!isValid || createMutation.isPending}>
             {createMutation.isPending && (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             )}
             Test & Create
           </Button>
@@ -132,15 +149,18 @@ export function CreateLlmProviderApiKeyDialog({
   );
 }
 
-function getDefaultFormValues(
-  defaultValues?: Partial<LlmProviderApiKeyFormValues>,
-): LlmProviderApiKeyFormValues {
+function getDefaultFormValues(params: {
+  defaultValues?: Partial<LlmProviderApiKeyFormValues>;
+  canCreateOrgScopedKey: boolean;
+}): LlmProviderApiKeyFormValues {
+  const { defaultValues, canCreateOrgScopedKey } = params;
   return {
     name: "",
     provider: "anthropic",
     apiKey: null,
     baseUrl: null,
-    scope: "personal",
+    extraHeaders: [],
+    scope: canCreateOrgScopedKey ? "org" : "personal",
     teamId: null,
     vaultSecretPath: null,
     vaultSecretKey: null,
@@ -150,18 +170,20 @@ function getDefaultFormValues(
 }
 
 function getIsCreateFormValid(params: {
+  azureOpenAiEntraIdEnabled: boolean;
   byosEnabled: boolean;
   values: LlmProviderApiKeyFormValues;
 }) {
-  const { byosEnabled, values } = params;
+  const { azureOpenAiEntraIdEnabled, byosEnabled, values } = params;
 
   return Boolean(
     values.apiKey !== LLM_PROVIDER_API_KEY_PLACEHOLDER &&
-      values.name &&
       (values.scope !== "team" || values.teamId) &&
       (byosEnabled
         ? values.vaultSecretPath && values.vaultSecretKey
-        : PROVIDERS_WITH_OPTIONAL_API_KEY.has(values.provider) ||
-          values.apiKey),
+        : isProviderApiKeyOptional({
+            provider: values.provider,
+            azureEntraIdEnabled: azureOpenAiEntraIdEnabled,
+          }) || values.apiKey),
   );
 }
