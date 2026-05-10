@@ -1000,12 +1000,12 @@ describe("parseConnectorPruneInterval", () => {
     vi.clearAllMocks();
   });
 
-  test("should return default 86400 when undefined", () => {
-    expect(parseConnectorPruneInterval(undefined)).toBe(86400);
+  test("should return default 2592000 when undefined", () => {
+    expect(parseConnectorPruneInterval(undefined)).toBe(2_592_000);
   });
 
-  test("should return default 86400 when empty string", () => {
-    expect(parseConnectorPruneInterval("")).toBe(86400);
+  test("should return default 2592000 when empty string", () => {
+    expect(parseConnectorPruneInterval("")).toBe(2_592_000);
   });
 
   test("should parse valid positive integer", () => {
@@ -1013,23 +1013,23 @@ describe("parseConnectorPruneInterval", () => {
   });
 
   test("should return default and warn for zero", () => {
-    expect(parseConnectorPruneInterval("0")).toBe(86400);
+    expect(parseConnectorPruneInterval("0")).toBe(2_592_000);
     expect(logger.warn).toHaveBeenCalledWith(
-      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "0", using default 86400',
+      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "0", using default 2592000',
     );
   });
 
   test("should return default and warn for negative value", () => {
-    expect(parseConnectorPruneInterval("-100")).toBe(86400);
+    expect(parseConnectorPruneInterval("-100")).toBe(2_592_000);
     expect(logger.warn).toHaveBeenCalledWith(
-      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "-100", using default 86400',
+      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "-100", using default 2592000',
     );
   });
 
   test("should return default and warn for non-numeric value", () => {
-    expect(parseConnectorPruneInterval("abc")).toBe(86400);
+    expect(parseConnectorPruneInterval("abc")).toBe(2_592_000);
     expect(logger.warn).toHaveBeenCalledWith(
-      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "abc", using default 86400',
+      'Invalid ARCHESTRA_KNOWLEDGE_BASE_CONNECTOR_PRUNE_INTERVAL_SECONDS value "abc", using default 2592000',
     );
   });
 

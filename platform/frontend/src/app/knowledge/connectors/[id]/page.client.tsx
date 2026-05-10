@@ -169,6 +169,10 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
       id: "documentsProcessed",
       header: "Processed",
       cell: ({ row }) => {
+        if (row.original.type === "prune") {
+          return <div>-</div>;
+        }
+
         const processed = row.original.documentsProcessed ?? 0;
         // totalItems will be available after codegen
         const total = (row.original as Record<string, unknown>).totalItems as
@@ -187,7 +191,22 @@ function ConnectorDetail({ connectorId }: { connectorId: string }) {
     {
       id: "documentsIngested",
       header: "Ingested",
-      cell: ({ row }) => <div>{row.original.documentsIngested ?? 0}</div>,
+      cell: ({ row }) => {
+        if (row.original.type === "prune") {
+          return <div>-</div>;
+        }
+        return <div>{row.original.documentsIngested ?? 0}</div>;
+      },
+    },
+    {
+      id: "documentsPruned",
+      header: "Pruned",
+      cell: ({ row }) => {
+        if (row.original.type === "sync") {
+          return <div>-</div>;
+        }
+        return <div>{row.original.documentsPruned ?? 0}</div>;
+      },
     },
     {
       id: "logs",

@@ -912,7 +912,7 @@ export function parseConnectorSyncMaxDuration(
 
 /** @public — exported for testability */
 export function parseConnectorPruneInterval(value: string | undefined): number {
-  const DEFAULT = 86400; // 24 hours in seconds
+  const DEFAULT = 2_592_000; // 30 days in seconds
   if (!value) return DEFAULT;
   const seconds = Number.parseInt(value, 10);
   if (Number.isNaN(seconds) || seconds <= 0) {

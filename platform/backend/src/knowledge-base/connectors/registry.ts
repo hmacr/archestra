@@ -48,6 +48,8 @@ const pruneSupported: Record<ConnectorType, boolean> = {
   asana: false,
   linear: false,
   salesforce: false,
+  onedrive: false,
+  file_upload: false,
 };
 
 export function getConnector(type: string): Connector {
